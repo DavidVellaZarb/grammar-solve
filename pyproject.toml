@@ -15,4 +15,5 @@ dependencies = [
     "huggingface-hub>=0.26",
     "ninja>=1.11",
     "setuptools>=82.0.0",
+    "matplotlib>=3.8",
 ]

@@ -41,11 +41,12 @@ def train(
     push_to_hub: bool = True,
     attn_implementation: str = "flash_attention_2",
     max_steps: int = -1,
+    hub_model_id: str | None = None,
 ):
     model_alias = model_name.split("/")[-1].lower().removesuffix("-instruct")
     dataset_name = Path(train_path).parent.name
     hf_namespace = os.getenv("HF_NAMESPACE", "")
-    hub_repo = f"{hf_namespace}/{model_alias}_{dataset_name}" if hf_namespace else None
+    hub_repo = hub_model_id or (f"{hf_namespace}/{model_alias}_{dataset_name}" if hf_namespace else None)
 
     train_ds = load_data(train_path)
     valid_ds = load_data(valid_path)
