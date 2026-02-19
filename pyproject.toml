@@ -13,5 +13,6 @@ dependencies = [
     "fire>=0.7",
     "python-dotenv>=1.0",
     "huggingface-hub>=0.26",
-    "ninja>=1.11"
+    "ninja>=1.11",
+    "setuptools>=82.0.0",
 ]
