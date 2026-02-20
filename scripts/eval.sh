@@ -17,4 +17,4 @@ uv run python src/plot.py \
     --models '["baseline", "grammar"]' \
     --model_labels '{"baseline": "Baseline", "grammar": "With Grammar (Ours)"}' \
     --test_labels '{"test": "Test Set"}' \
-    --output_path figures/baseline_vs_grammar.png
+    --output_path results/baseline_vs_grammar.png

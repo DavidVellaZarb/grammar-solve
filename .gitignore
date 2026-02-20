@@ -212,6 +212,6 @@ __marimo__/
 # Project specific
 grammars/
 data/
-outputs/
+results/
 wandb/
 CLAUDE.md

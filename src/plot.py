@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 def plot_accuracies(
     results_dir: str = "results",
     models: list[str] | None = None,
-    output_path: str = "figures/results.png",
+    output_path: str = "results/results.png",
     title: str | None = None,
     test_labels: dict[str, str] | None = None,
     model_labels: dict[str, str] | None = None,

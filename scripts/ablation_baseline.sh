@@ -25,7 +25,7 @@ uv run python src/eval.py \
 uv run python src/plot.py \
     --results_dir results \
     --models '["baseline"]' \
-    --output_path figures/ablation_baseline.png \
+    --output_path results/baseline/ablation_baseline.png \
     --title "Baseline Model" \
     --model_labels '{"baseline": "Baseline"}' \
     --test_labels '{"test": "Original", "test_add_rule": "Added Rules", "test_remove_rule": "Removed Rules"}'

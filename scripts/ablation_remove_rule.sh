@@ -29,7 +29,7 @@ uv run python src/eval.py \
 uv run python src/plot.py \
     --results_dir results \
     --models '["remove_rule"]' \
-    --output_path figures/ablation_remove_rule.png \
+    --output_path results/remove_rule/ablation_remove_rule.png \
     --title "Remove Rule Model" \
     --model_labels '{"remove_rule": "Remove Rule"}' \
     --test_labels '{"test": "Original", "test_add_rule": "Added Rules", "test_remove_rule": "Removed Rules"}'
