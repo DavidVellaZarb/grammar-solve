@@ -2,8 +2,19 @@
 set -euo pipefail
 
 uv run python src/eval.py \
-    --adapter dv347/qwen2.5-7b_smcalflow \
-    --test_path data/smcalflow/test.json \
-    --batch_size 8 \
-    --max_new_tokens 512 \
-    --output_path results/eval_output.json
+    --adapter "${HF_NAMESPACE:-}/qwen2.5-7b_smcalflow-baseline" \
+    --noinclude_grammar \
+    --output_path results/baseline/test.json \
+    "$@"
+
+uv run python src/eval.py \
+    --adapter "${HF_NAMESPACE:-}/qwen2.5-7b_smcalflow" \
+    --output_path results/grammar/test.json \
+    "$@"
+
+uv run python src/plot.py \
+    --results_dir results \
+    --models '["baseline", "grammar"]' \
+    --model_labels '{"baseline": "Baseline", "grammar": "With Grammar (Ours)"}' \
+    --test_labels '{"test": "Test Set"}' \
+    --output_path figures/baseline_vs_grammar.png

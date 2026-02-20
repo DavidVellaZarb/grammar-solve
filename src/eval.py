@@ -19,6 +19,7 @@ def evaluate(
     output_path: str | None = None,
     attn_implementation: str = "flash_attention_2",
     grammar_file: str | None = None,
+    include_grammar: bool = True,
 ):
     peft_config = PeftConfig.from_pretrained(adapter)
     base_model_name = model_name or peft_config.base_model_name_or_path
@@ -57,7 +58,7 @@ def evaluate(
 
     prompts = []
     for ex in examples:
-        messages = format_prompt_messages(ex)
+        messages = format_prompt_messages(ex, include_grammar=include_grammar)
         text = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )

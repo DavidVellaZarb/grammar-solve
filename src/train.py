@@ -23,7 +23,7 @@ def train(
     lora_alpha: int = 128,
     lora_dropout: float = 0.05,
     lora_target_modules: str = "all-linear",
-    num_train_epochs: int = 3,
+    num_train_epochs: int = 1,
     per_device_train_batch_size: int = 4,
     gradient_accumulation_steps: int = 4,
     learning_rate: float = 1e-4,
@@ -42,14 +42,15 @@ def train(
     attn_implementation: str = "flash_attention_2",
     max_steps: int = -1,
     hub_model_id: str | None = None,
+    include_grammar: bool = True,
 ):
     model_alias = model_name.split("/")[-1].lower().removesuffix("-instruct")
     dataset_name = Path(train_path).parent.name
     hf_namespace = os.getenv("HF_NAMESPACE", "")
     hub_repo = hub_model_id or (f"{hf_namespace}/{model_alias}_{dataset_name}" if hf_namespace else None)
 
-    train_ds = load_data(train_path)
-    valid_ds = load_data(valid_path)
+    train_ds = load_data(train_path, include_grammar=include_grammar)
+    valid_ds = load_data(valid_path, include_grammar=include_grammar)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
