@@ -18,6 +18,8 @@ dependencies = [
     "matplotlib>=3.8",
     "lark>=1.1",
     "pytest>=8.0",
+    "openai>=1.0",
+    "tqdm>=4.66",
 ]
 
 [tool.pytest.ini_options]

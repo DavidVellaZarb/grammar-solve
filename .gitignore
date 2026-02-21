@@ -215,4 +215,5 @@ data/
 results/
 outputs/
 wandb/
+cache/
 CLAUDE.md
