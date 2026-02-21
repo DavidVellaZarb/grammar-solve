@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ADAPTER="dv347/qwen2.5-7b_smcalflow"
+ADAPTER="${HF_NAMESPACE}/qwen2.5-7b_smcalflow"
 RESULTS_DIR="results/baseline"
 
 uv run python src/eval.py \
