@@ -138,12 +138,8 @@ def evaluate(
     )
 
     if write:
-        with open(predicted_path) as f:
-            full_data = json.load(f)
-        full_data["data"] = predicted_data
-        full_data["metrics"] = metrics
         with open(predicted_path, "w") as f:
-            json.dump(full_data, f, indent=2)
+            json.dump({"metrics": metrics, "data": predicted_data}, f, indent=2)
         print(f"\nAnnotated results written to {predicted_path}")
 
 
