@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HUB_MODEL_ID="${HF_NAMESPACE:+${HF_NAMESPACE}/qwen2.5-7b_smcalflow-remove-rule}"
-ADAPTER="${HUB_MODEL_ID:-outputs/qwen2.5-7b-lora-remove-rule}"
+ADAPTER="${HF_NAMESPACE}/qwen2.5-7b_smcalflow-remove-rule"
 RESULTS_DIR="results/remove_rule"
 
 uv run python src/train.py \
     --train_path "data/smcalflow/train_remove_rule.json" \
-    --output_dir "outputs/qwen2.5-7b-lora-remove-rule" \
-    --hub_model_id "$HUB_MODEL_ID" \
+    --hub_model_id "$ADAPTER" \
     "$@"
 
 uv run python src/eval.py \
