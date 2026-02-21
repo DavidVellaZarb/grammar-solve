@@ -3,8 +3,6 @@ import hashlib
 import json
 import os
 import random
-import re
-
 import fire
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
@@ -23,7 +21,7 @@ load_dotenv()
 
 SYSTEM_PROMPT = (
     "You are a grammar specialization assistant. Given a natural language query "
-    "and grammar rules that use generic terminals (ESCAPED_STRING for strings, "
+    "and a grammar that contains generic terminals (ESCAPED_STRING for strings, "
     "NUMBER for numbers), predict the specific values that should replace "
     "these generic terminals.\n\n"
     "Output ONLY the specialized rules in the format:\n"
@@ -54,41 +52,6 @@ def extract_generic_rules(grammar_text: str) -> dict[str, list[str]]:
     return result
 
 
-def _is_quoted_string(alt: str) -> bool:
-    return bool(re.match(r'^".*"$', alt.strip()))
-
-
-
-def derive_generic_rule(rule_name: str, alts: list[str]) -> str | None:
-    if rule_name == "string":
-        if all(_is_quoted_string(a) for a in alts):
-            return "ESCAPED_STRING"
-        return None
-
-    if rule_name == "number":
-        generic_parts = []
-        has_l = False
-        has_no_l = False
-        for alt in alts:
-            stripped = alt.strip().strip('"')
-            if re.match(r'^-?\d+(\.\d+)?L$', stripped):
-                has_l = True
-            elif re.match(r'^-?\d+(\.\d+)?$', stripped):
-                has_no_l = True
-            else:
-                # Non-numeric alternative (e.g., "(longToNum (Acouple))") — skip
-                return None
-        if has_l:
-            generic_parts.append('NUMBER "L"')
-        if has_no_l:
-            generic_parts.append("NUMBER")
-        if generic_parts:
-            return " | ".join(generic_parts)
-        return None
-
-    return None
-
-
 def replace_generic_rules(
     grammar_text: str, predicted_rules: dict[str, list[str]]
 ) -> str:
@@ -100,31 +63,26 @@ def replace_generic_rules(
 
 
 def build_icl_examples(
-    train_data: list[dict], n_icl_examples: int = 64, seed: int = 42
+    train_data: list[dict],
+    train_generic_data: list[dict],
+    n_icl_examples: int,
+    seed: int,
 ) -> list[dict]:
     candidates = []
-    for ex in train_data:
-        grammar = ex["minimal_grammar"]
-        parsed = parse_minimal_grammar(grammar)
-
-        generic_rules = {}
-        for name, alts in parsed.items():
-            derived = derive_generic_rule(name, alts)
-            if derived is not None:
-                generic_rules[name] = derived
+    for ex, generic_ex in zip(train_data, train_generic_data):
+        generic_grammar = generic_ex["minimal_grammar"]
+        generic_rules = extract_generic_rules(generic_grammar)
 
         if not generic_rules:
             continue
 
-        gold_rules = {name: parsed[name] for name in generic_rules}
+        specialized_parsed = parse_minimal_grammar(ex["minimal_grammar"])
+        gold_rules = {name: specialized_parsed[name] for name in generic_rules}
 
         candidates.append(
             {
                 "query": ex["query"],
-                "generic_rules": {
-                    name: [a.strip() for a in generic_rhs.split(" | ")]
-                    for name, generic_rhs in generic_rules.items()
-                },
+                "grammar": generic_grammar,
                 "gold_rules": gold_rules,
             }
         )
@@ -136,11 +94,8 @@ def build_icl_examples(
     return candidates
 
 
-def _format_user_message(query: str, generic_rules: dict) -> str:
-    rules_str = "\n".join(
-        f'{name} ::= {" | ".join(alts)}' for name, alts in generic_rules.items()
-    )
-    return f"Query: {query}\n\nRules to specialize:\n{rules_str}"
+def _format_user_message(query: str, grammar: str) -> str:
+    return f"Query: {query}\n\nGrammar:\n{grammar}"
 
 
 def _format_assistant_message(gold_rules: dict[str, list[str]]) -> str:
@@ -149,7 +104,7 @@ def _format_assistant_message(gold_rules: dict[str, list[str]]) -> str:
 
 def _build_messages(
     query: str,
-    generic_rules: dict,
+    grammar: str,
     icl_examples: list[dict],
 ) -> list[ChatCompletionMessageParam]:
     messages: list[ChatCompletionMessageParam] = [
@@ -160,7 +115,7 @@ def _build_messages(
         messages.append(
             {
                 "role": "user",
-                "content": _format_user_message(ex["query"], ex["generic_rules"]),
+                "content": _format_user_message(ex["query"], ex["grammar"]),
             }
         )
         messages.append(
@@ -173,7 +128,7 @@ def _build_messages(
     messages.append(
         {
             "role": "user",
-            "content": _format_user_message(query, generic_rules),
+            "content": _format_user_message(query, grammar),
         }
     )
     return messages
@@ -237,7 +192,7 @@ async def _process_example(
         pbar.update(1)
         return ex, False
 
-    messages = _build_messages(ex["query"], generic_rules, icl_examples)
+    messages = _build_messages(ex["query"], grammar, icl_examples)
     response = await _call_llm_async(client, model, messages, cache, semaphore)
 
     predicted = parse_minimal_grammar(response)
@@ -284,6 +239,7 @@ async def _specialize_async(
 def specialize(
     test_path: str = "data/smcalflow/test_generic.json",
     train_path: str = "data/smcalflow/train.json",
+    train_generic_path: str = "data/smcalflow/train_generic.json",
     output_path: str = "outputs/predicted_grammars/specialized.json",
     model: str = "anthropic/claude-opus-4.6",
     n_icl_examples: int = 128,
@@ -292,10 +248,15 @@ def specialize(
     max_concurrent: int = 10,
 ):
     train_data = load_raw_data(train_path)
+    train_generic_data = load_raw_data(train_generic_path)
     test_data = load_raw_data(test_path)
 
+    assert len(train_data) == len(train_generic_data), (
+        f"Training data length mismatch: {len(train_data)} vs {len(train_generic_data)}"
+    )
+
     print(f"Building ICL examples from {len(train_data)} training examples...")
-    icl_examples = build_icl_examples(train_data, n_icl_examples, seed)
+    icl_examples = build_icl_examples(train_data, train_generic_data, n_icl_examples, seed)
     print(f"Selected {len(icl_examples)} ICL examples")
 
     cache = _load_cache(cache_path)
