@@ -213,5 +213,6 @@ __marimo__/
 grammars/
 data/
 results/
+outputs/
 wandb/
 CLAUDE.md
