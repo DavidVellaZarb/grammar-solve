@@ -52,7 +52,7 @@ def evaluate(
             assert ex["query"] == gex["query"], (
                 f"Query mismatch: {ex['query']!r} vs {gex['query']!r}"
             )
-            ex["minimal_grammar"] = gex["predicted_grammar"]
+            ex["minimal_grammar"] = gex["minimal_grammar"]
     else:
         print("Using gold grammars from test data")
 
