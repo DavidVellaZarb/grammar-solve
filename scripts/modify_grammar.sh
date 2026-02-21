@@ -20,3 +20,13 @@ uv run python src/modify_grammar.py \
     --input_path "data/smcalflow/test.json" \
     --output_path "data/smcalflow/test_remove_rule.json" \
     --operations '["remove"]' --seed 42 --proportion 1 "$@"
+
+uv run python src/modify_grammar.py \
+    --input_path "data/smcalflow/train.json" \
+    --output_path "data/smcalflow/train_add_remove_rule.json" \
+    --operations '["add", "remove"]' --seed 42 --balanced "$@"
+
+uv run python src/modify_grammar.py \
+    --input_path "data/smcalflow/test.json" \
+    --output_path "data/smcalflow/test_add_remove_rule.json" \
+    --operations '["add", "remove"]' --seed 42 --proportion 1 --balanced "$@"

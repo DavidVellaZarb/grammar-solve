@@ -64,6 +64,7 @@ def modify_grammar(
     grammar_file: str = "grammars/smcalflow.lark",
     exclude_enum_terminals: bool = True,
     seed: int | None = None,
+    balanced: bool = False,
 ):
     """Perturb minimal grammars by adding distractors or removing needed rules."""
     ops = set(operations)
@@ -90,13 +91,27 @@ def modify_grammar(
     op_list = sorted(operations)
     stats = {op: 0 for op in op_list}
 
+    if balanced and len(op_list) > 1:
+        shuffled_indices = list(indices)
+        rng.shuffle(shuffled_indices)
+        n = len(shuffled_indices)
+        per_op = n // len(op_list)
+        op_assignments = {}
+        for i, op in enumerate(op_list):
+            start = i * per_op
+            end = (i + 1) * per_op if i < len(op_list) - 1 else n
+            for j in range(start, end):
+                op_assignments[shuffled_indices[j]] = op
+    else:
+        op_assignments = None
+
     for example in data:
         example["modifications"] = {"added": [], "removed": []}
 
     for idx in indices:
         example = data[idx]
         minimal_rules = parse_minimal_grammar(example["minimal_grammar"])
-        op = rng.choice(op_list)
+        op = op_assignments[idx] if op_assignments is not None else rng.choice(op_list)
 
         if op == "add":
             result = add_alternative(minimal_rules, lark_rules, rng)
@@ -112,6 +127,10 @@ def modify_grammar(
         "total": len(data),
         "modified": len(indices),
         "proportion": len(indices) / len(data),
+        "operations": {
+            op: {"count": count, "proportion": count / len(data) if len(data) else 0}
+            for op, count in stats.items()
+        },
     }
     with open(output_path, "w") as f:
         json.dump({"metadata": metadata, "data": data}, f, indent=2)
