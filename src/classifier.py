@@ -216,6 +216,7 @@ def train(
         model_name,
         num_labels=n_labels,
         problem_type="multi_label_classification",
+        torch_dtype=torch.float32,
     )
 
     def compute_metrics(eval_pred):
@@ -242,7 +243,8 @@ def train(
         load_best_model_at_end=True,
         metric_for_best_model="f1_micro",
         greater_is_better=True,
-        fp16=torch.cuda.is_available(),
+        bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
+        fp16=torch.cuda.is_available() and not torch.cuda.is_bf16_supported(),
         logging_steps=50,
         seed=seed,
         report_to="wandb" if use_wandb else "none",
