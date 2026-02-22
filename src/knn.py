@@ -1,5 +1,4 @@
 import hashlib
-import json
 import os
 
 import fire
@@ -8,10 +7,13 @@ from sentence_transformers import SentenceTransformer
 
 from data import load_raw_data
 from grammar_utils import parse_minimal_grammar, reconstruct_minimal_grammar
+from predict_utils import write_output
 
 
 def _compute_embeddings(
-    texts: list[str], model: SentenceTransformer, batch_size: int = 256
+    texts: list[str],
+    model: SentenceTransformer,
+    batch_size: int = 256,
 ) -> np.ndarray:
     return model.encode(texts, batch_size=batch_size, normalize_embeddings=True)
 
@@ -19,13 +21,13 @@ def _compute_embeddings(
 def _load_or_compute_embeddings(
     texts: list[str],
     model: SentenceTransformer,
-    cache_path: str,
+    cache_dir: str,
     model_name: str,
     batch_size: int = 256,
 ) -> np.ndarray:
     query_hash = hashlib.md5("".join(texts).encode()).hexdigest()[:8]
     safe_model = model_name.replace("/", "_")
-    cache_file = os.path.join(cache_path, f"{safe_model}_{query_hash}.npy")
+    cache_file = os.path.join(cache_dir, f"{safe_model}_{query_hash}.npy")
 
     if os.path.exists(cache_file):
         print(f"Loading cached embeddings from {cache_file}")
@@ -33,7 +35,7 @@ def _load_or_compute_embeddings(
 
     print(f"Computing embeddings for {len(texts)} texts...")
     embeddings = _compute_embeddings(texts, model, batch_size)
-    os.makedirs(cache_path, exist_ok=True)
+    os.makedirs(cache_dir, exist_ok=True)
     np.save(cache_file, embeddings)
     print(f"Cached embeddings to {cache_file}")
     return embeddings
@@ -106,7 +108,6 @@ def predict(
     print(f"Model: {model_name}, k={k}, strategy={strategy}")
 
     model = SentenceTransformer(model_name)
-
     train_embeddings = _load_or_compute_embeddings(
         train_queries, model, cache_dir, model_name, batch_size
     )
@@ -123,19 +124,13 @@ def predict(
             train_data[idx]["minimal_grammar"] for idx in knn_indices[i]
         ]
         merged = merge_grammars(neighbor_grammars, strategy)
-        results.append(
-            {
-                "query": ex["query"],
-                "minimal_grammar": merged,
-                "program": ex["program"],
-            }
-        )
+        results.append({
+            "query": ex["query"],
+            "minimal_grammar": merged,
+            "program": ex["program"],
+        })
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w") as f:
-        json.dump({"data": results}, f, indent=2)
-
-    print(f"Wrote {len(results)} predictions to {output_path}")
+    write_output(results, output_path)
 
 
 if __name__ == "__main__":
