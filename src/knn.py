@@ -90,7 +90,7 @@ def predict(
     test_path: str = "data/smcalflow/test.json",
     train_path: str = "data/smcalflow/train_generic.json",
     output_path: str = "outputs/predicted_grammars/knn_generic.json",
-    model_name: str = "all-MiniLM-L6-v2",
+    model_name: str = "BAAI/bge-large-en-v1.5",
     k: int = 1,
     strategy: str = "union",
     cache_dir: str = "cache/knn",
