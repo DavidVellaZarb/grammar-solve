@@ -158,6 +158,7 @@ def _build_dataset(
 
 def train(
     train_path: str = "data/smcalflow/train_generic.json",
+    val_path: str = "data/smcalflow/valid_generic.json",
     grammar_path: str = "grammars/smcalflow_pruned.lark",
     output_dir: str = "outputs/classifier",
     model_name: str = "microsoft/deberta-v3-base",
@@ -165,7 +166,6 @@ def train(
     learning_rate: float = 2e-5,
     per_device_train_batch_size: int = 32,
     max_seq_length: int = 128,
-    val_split: float = 0.1,
     seed: int = 42,
     push_to_hub: bool = True,
     hub_model_id: str | None = None,
@@ -205,9 +205,12 @@ def train(
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    ds = _build_dataset(train_data, alt_to_label_idx, n_labels, tokenizer, max_seq_length)
-    split = ds.train_test_split(test_size=val_split, seed=seed)
-    print(f"Train: {len(split['train'])}, Val: {len(split['test'])}")
+    val_data = load_raw_data(val_path)
+    print(f"Loaded {len(val_data)} validation examples")
+
+    train_ds = _build_dataset(train_data, alt_to_label_idx, n_labels, tokenizer, max_seq_length)
+    val_ds = _build_dataset(val_data, alt_to_label_idx, n_labels, tokenizer, max_seq_length)
+    print(f"Train: {len(train_ds)}, Val: {len(val_ds)}")
 
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
@@ -250,8 +253,8 @@ def train(
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=split["train"],
-        eval_dataset=split["test"],
+        train_dataset=train_ds,
+        eval_dataset=val_ds,
         compute_metrics=compute_metrics,
         data_collator=DataCollatorWithPadding(tokenizer),
     )
