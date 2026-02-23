@@ -43,14 +43,15 @@ def train(
     max_steps: int = -1,
     hub_model_id: str | None = None,
     include_grammar: bool = True,
+    task: str = "program",
 ):
     model_alias = model_name.split("/")[-1].lower().removesuffix("-instruct")
     dataset_name = Path(train_path).parent.name
     hf_namespace = os.getenv("HF_NAMESPACE", "")
     hub_repo = hub_model_id or (f"{hf_namespace}/{model_alias}_{dataset_name}" if hf_namespace else None)
 
-    train_ds = load_data(train_path, include_grammar=include_grammar)
-    valid_ds = load_data(valid_path, include_grammar=include_grammar)
+    train_ds = load_data(train_path, include_grammar=include_grammar, task=task)
+    valid_ds = load_data(valid_path, include_grammar=include_grammar, task=task)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
