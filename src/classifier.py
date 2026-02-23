@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from datetime import datetime
 
 import fire
 import numpy as np
@@ -232,8 +233,10 @@ def train(
         }
 
     use_wandb = bool(os.environ.get("WANDB_API_KEY"))
+    run_name = f"classifier_{model_alias}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     training_args = TrainingArguments(
         output_dir=os.path.join(output_dir, "checkpoints"),
+        run_name=run_name,
         num_train_epochs=num_train_epochs,
         learning_rate=learning_rate,
         per_device_train_batch_size=per_device_train_batch_size,
