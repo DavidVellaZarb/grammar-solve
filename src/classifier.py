@@ -78,25 +78,30 @@ def build_label_index(
             continue
         for alt in alts:
             normalized = _normalize_alternative(alt)
-            label = (name, normalized)
-            if label not in label_to_idx:
-                label_to_idx[label] = len(labels)
-                labels.append(label)
+            expanded_alts = _expand_alternative(normalized, enum_values)
+
+            if len(expanded_alts) > 1 or _normalize_alternative(expanded_alts[0]) != normalized:
+                for exp_alt in expanded_alts:
+                    exp_norm = _normalize_alternative(exp_alt)
+                    label = (name, exp_norm)
+                    if label not in label_to_idx:
+                        label_to_idx[label] = len(labels)
+                        labels.append(label)
+            else:
+                label = (name, normalized)
+                if label not in label_to_idx:
+                    label_to_idx[label] = len(labels)
+                    labels.append(label)
 
     alt_to_label_idx: dict[tuple[str, str], int] = {}
     alt_to_label_idx.update(label_to_idx)
     for label_idx, (name, alt) in enumerate(labels):
-        for exp_alt in _expand_alternative(alt, enum_values):
-            normalized = _normalize_alternative(exp_alt)
-            merged = re.sub(r'"\s+"', "", normalized)
-            merged = " ".join(merged.split())
-            key = (name, normalized)
-            if key not in alt_to_label_idx:
-                alt_to_label_idx[key] = label_idx
-            if merged != normalized:
-                key_merged = (name, merged)
-                if key_merged not in alt_to_label_idx:
-                    alt_to_label_idx[key_merged] = label_idx
+        merged = re.sub(r'"\s+"', "", alt)
+        merged = " ".join(merged.split())
+        if merged != alt:
+            key_merged = (name, merged)
+            if key_merged not in alt_to_label_idx:
+                alt_to_label_idx[key_merged] = label_idx
 
     return labels, label_to_idx, alt_to_label_idx
 
