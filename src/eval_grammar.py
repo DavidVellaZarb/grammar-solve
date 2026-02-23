@@ -45,6 +45,7 @@ def evaluate(
     )
 
     exact_match_count = 0
+    relaxed_match_count = 0
     only_added_count = 0
     only_missing_count = 0
     both_count = 0
@@ -66,9 +67,15 @@ def evaluate(
             pred_ex["added_rules"] = result["added_rules"]
             pred_ex["missing_rules"] = result["missing_rules"]
             pred_ex["exact_match"] = result["exact_match"]
+            pred_ex["relaxed_match"] = (
+                len(result["added_rules"]) <= 1 and len(result["missing_rules"]) <= 1
+            )
 
         has_added = len(result["added_rules"]) > 0
         has_missing = len(result["missing_rules"]) > 0
+
+        if len(result["added_rules"]) <= 1 and len(result["missing_rules"]) <= 1:
+            relaxed_match_count += 1
 
         if not has_added and not has_missing:
             exact_match_count += 1
@@ -87,6 +94,7 @@ def evaluate(
     metrics = {
         "total": total,
         "exact_match": exact_match_count / total,
+        "relaxed_match": relaxed_match_count / total,
         "only_added": {
             "proportion": only_added_count / total,
             "avg_added": (
@@ -120,6 +128,7 @@ def evaluate(
 
     print(f"Total examples: {total}")
     print(f"Exact match: {metrics['exact_match']:.4f} ({exact_match_count}/{total})")
+    print(f"Relaxed match: {metrics['relaxed_match']:.4f} ({relaxed_match_count}/{total})")
     print(
         f"Only added: {metrics['only_added']['proportion']:.4f} "
         f"({only_added_count}/{total}), "
