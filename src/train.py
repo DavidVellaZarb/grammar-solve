@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from pathlib import Path
 
 import fire
@@ -65,8 +66,15 @@ def train(
         task_type=TaskType.CAUSAL_LM,
     )
 
+    if task == "program":
+        run_type = "grammar_guided" if include_grammar else "baseline"
+    else:
+        run_type = f"predict_{task}"
+    run_name = f"{run_type}_{model_alias}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
     sft_config = SFTConfig(
         output_dir=output_dir,
+        run_name=run_name,
         num_train_epochs=num_train_epochs,
         max_steps=max_steps,
         per_device_train_batch_size=per_device_train_batch_size,
