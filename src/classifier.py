@@ -273,7 +273,6 @@ def train(
     print(f"Saved model and labels to {output_dir}")
 
     if push_to_hub and hub_repo:
-        trainer.push_to_hub()
         tokenizer.push_to_hub(hub_repo)
         from huggingface_hub import HfApi
         HfApi().upload_file(
