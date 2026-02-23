@@ -2,13 +2,13 @@
 set -euo pipefail
 
 uv run python src/eval.py \
-    --adapter "${HF_NAMESPACE:-}/qwen2.5-7b_smcalflow-baseline" \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_smcalflow-baseline" \
     --noinclude_grammar \
     --output_path results/baseline/baseline.json \
     "$@"
 
 uv run python src/eval.py \
-    --adapter "${HF_NAMESPACE:-}/qwen2.5-7b_smcalflow" \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_smcalflow" \
     --output_path results/baseline/test.json \
     "$@"
 
