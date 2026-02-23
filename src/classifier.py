@@ -1,7 +1,6 @@
 import json
 import os
 import re
-from datetime import datetime
 
 import fire
 import numpy as np
@@ -73,6 +72,7 @@ def build_label_index(
 
     labels: list[tuple[str, str]] = []
     label_to_idx: dict[tuple[str, str], int] = {}
+    unmerged_lookups: list[tuple[tuple[str, str], tuple[str, str]]] = []
 
     for name, alts in rules.items():
         if name.isupper():
@@ -81,28 +81,24 @@ def build_label_index(
             normalized = _normalize_alternative(alt)
             expanded_alts = _expand_alternative(normalized, enum_values)
 
-            if len(expanded_alts) > 1 or _normalize_alternative(expanded_alts[0]) != normalized:
-                for exp_alt in expanded_alts:
-                    exp_norm = _normalize_alternative(exp_alt)
-                    label = (name, exp_norm)
-                    if label not in label_to_idx:
-                        label_to_idx[label] = len(labels)
-                        labels.append(label)
-            else:
-                label = (name, normalized)
+            has_enum = len(expanded_alts) > 1 or _normalize_alternative(expanded_alts[0]) != normalized
+            forms = [_normalize_alternative(e) for e in expanded_alts] if has_enum else [normalized]
+
+            for form_norm in forms:
+                merged = re.sub(r'"\s+"', "", form_norm)
+                merged = " ".join(merged.split())
+                label = (name, merged)
                 if label not in label_to_idx:
                     label_to_idx[label] = len(labels)
                     labels.append(label)
+                if form_norm != merged:
+                    unmerged_lookups.append(((name, form_norm), label))
 
     alt_to_label_idx: dict[tuple[str, str], int] = {}
     alt_to_label_idx.update(label_to_idx)
-    for label_idx, (name, alt) in enumerate(labels):
-        merged = re.sub(r'"\s+"', "", alt)
-        merged = " ".join(merged.split())
-        if merged != alt:
-            key_merged = (name, merged)
-            if key_merged not in alt_to_label_idx:
-                alt_to_label_idx[key_merged] = label_idx
+    for unmerged_key, merged_key in unmerged_lookups:
+        if unmerged_key not in alt_to_label_idx:
+            alt_to_label_idx[unmerged_key] = label_to_idx[merged_key]
 
     return labels, label_to_idx, alt_to_label_idx
 
@@ -236,10 +232,8 @@ def train(
         }
 
     use_wandb = bool(os.environ.get("WANDB_API_KEY"))
-    run_name = f"classifier_{model_alias}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     training_args = TrainingArguments(
         output_dir=os.path.join(output_dir, "checkpoints"),
-        run_name=run_name,
         num_train_epochs=num_train_epochs,
         learning_rate=learning_rate,
         per_device_train_batch_size=per_device_train_batch_size,
