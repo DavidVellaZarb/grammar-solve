@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Train 7 add_remove ablation models with varying n_ops.
-# Each model is trained on its corresponding train_add_remove_n*_p20.json data.
-
 CONFIGS=("n1" "n2" "n3" "n4" "n2-4" "n3-5" "n4-6")
 
 for CFG in "${CONFIGS[@]}"; do

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Evaluate 7 add_remove ablation models on gold + 7 perturbed test sets each.
-# 7 models x 8 test sets = 56 eval runs.
-
 CONFIGS=("n1" "n2" "n3" "n4" "n2-4" "n3-5" "n4-6")
 TEST_SETS=("test" "test_add_remove_n1" "test_add_remove_n2" "test_add_remove_n3" "test_add_remove_n4" "test_add_remove_n2-4" "test_add_remove_n3-5" "test_add_remove_n4-6")
+RESULTS_BASE="results/ablations_add_remove"
+
+TEST_LABELS='{"test": "Gold", "test_add_remove_n1": "n=1", "test_add_remove_n2": "n=2", "test_add_remove_n3": "n=3", "test_add_remove_n4": "n=4", "test_add_remove_n2-4": "n=[2,4)", "test_add_remove_n3-5": "n=[3,5)", "test_add_remove_n4-6": "n=[4,6)"}'
 
 for CFG in "${CONFIGS[@]}"; do
     ADAPTER="${HF_NAMESPACE}/qwen2.5-7b_smcalflow-add-remove-${CFG}-p20"
-    RESULTS_DIR="results/ablations_add_remove/add_remove_${CFG}_p20"
+    RESULTS_DIR="${RESULTS_BASE}/add_remove_${CFG}_p20"
 
     echo "=== Evaluating: ${CFG} ==="
 
@@ -20,4 +20,12 @@ for CFG in "${CONFIGS[@]}"; do
             --output_path "$RESULTS_DIR/${TEST}.json" \
             "$@"
     done
+
+    uv run python src/plot.py \
+        --results_dir "$RESULTS_BASE" \
+        --models "[\"add_remove_${CFG}_p20\"]" \
+        --output_path "$RESULTS_DIR/ablation_add_remove_${CFG}_p20.png" \
+        --title "Add+Remove Model (n_ops=${CFG}, 20%)" \
+        --model_labels "{\"add_remove_${CFG}_p20\": \"Add+Remove (${CFG})\"}" \
+        --test_labels "$TEST_LABELS"
 done
