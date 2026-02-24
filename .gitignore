@@ -211,7 +211,7 @@ __marimo__/
 
 # Project specific
 grammars/
-data/
+/data/
 results/
 outputs/
 wandb/

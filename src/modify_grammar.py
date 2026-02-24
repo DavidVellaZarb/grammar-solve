@@ -12,7 +12,7 @@ from grammar_utils import (
     reconstruct_minimal_grammar,
 )
 
-KNOWN_OPERATIONS = {"add", "remove"}
+KNOWN_OPERATIONS = {"add", "remove", "add_remove"}
 PROTECTED_RULES = {"string", "number"}
 
 
@@ -65,8 +65,8 @@ def modify_grammar(
     exclude_enum_terminals: bool = True,
     seed: int | None = None,
     balanced: bool = False,
+    n_ops: int | list[int] = 1,
 ):
-    """Perturb minimal grammars by adding distractors or removing needed rules."""
     ops = set(operations)
     if not ops:
         raise ValueError("operations must be non-empty")
@@ -74,11 +74,27 @@ def modify_grammar(
     if unknown:
         raise ValueError(f"Unknown operations: {unknown}. Known: {KNOWN_OPERATIONS}")
 
+    if isinstance(n_ops, int):
+        if n_ops < 1:
+            raise ValueError(f"n_ops must be >= 1, got {n_ops}")
+        n_ops_range = (n_ops, n_ops + 1)
+    elif isinstance(n_ops, list):
+        if len(n_ops) != 2 or not all(isinstance(x, int) for x in n_ops):
+            raise ValueError(f"n_ops list must be [low, high] of ints, got {n_ops}")
+        low, high = n_ops
+        if low < 1:
+            raise ValueError(f"n_ops low must be >= 1, got {low}")
+        if high <= low:
+            raise ValueError(f"n_ops high must be > low, got [{low}, {high})")
+        n_ops_range = (low, high)
+    else:
+        raise ValueError(f"n_ops must be int or list[int], got {type(n_ops)}")
+
     with open(input_path) as f:
         data = json.load(f)["data"]
 
     lark_rules: dict[str, list[str]] = {}
-    if "add" in ops:
+    if "add" in ops or "add_remove" in ops:
         with open(grammar_file) as f:
             all_rules = parse_lark_grammar(f.read())
         excluded = GENERIC_TERMINALS | ENUM_TERMINALS if exclude_enum_terminals else GENERIC_TERMINALS
@@ -114,11 +130,36 @@ def modify_grammar(
         op = op_assignments[idx] if op_assignments is not None else rng.choice(op_list)
 
         if op == "add":
-            result = add_alternative(minimal_rules, lark_rules, rng)
-            example["modifications"]["added"].append(result)
-        else:
-            result = remove_alternative(minimal_rules, rng)
-            example["modifications"]["removed"].append(result)
+            n = rng.randrange(*n_ops_range)
+            for _ in range(n):
+                try:
+                    result = add_alternative(minimal_rules, lark_rules, rng)
+                    example["modifications"]["added"].append(result)
+                except ValueError:
+                    break
+        elif op == "remove":
+            n = rng.randrange(*n_ops_range)
+            for _ in range(n):
+                try:
+                    result = remove_alternative(minimal_rules, rng)
+                    example["modifications"]["removed"].append(result)
+                except ValueError:
+                    break
+        elif op == "add_remove":
+            n_add = rng.randrange(*n_ops_range)
+            n_remove = rng.randrange(*n_ops_range)
+            for _ in range(n_add):
+                try:
+                    result = add_alternative(minimal_rules, lark_rules, rng)
+                    example["modifications"]["added"].append(result)
+                except ValueError:
+                    break
+            for _ in range(n_remove):
+                try:
+                    result = remove_alternative(minimal_rules, rng)
+                    example["modifications"]["removed"].append(result)
+                except ValueError:
+                    break
 
         example["minimal_grammar"] = reconstruct_minimal_grammar(minimal_rules)
         stats[op] += 1
@@ -127,6 +168,7 @@ def modify_grammar(
         "total": len(data),
         "modified": len(indices),
         "proportion": len(indices) / len(data),
+        "n_ops": n_ops,
         "operations": {
             op: {"count": count, "proportion": count / len(data) if len(data) else 0}
             for op, count in stats.items()
