@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Generate add_remove ablation data with varying n_ops.
-# Train splits use proportion 0.2, test splits use proportion 1.
-# 7 configurations: fixed n_ops (1,2,3,4) and interval n_ops ([2,4],[3,5],[4,6]).
-
 # --- Fixed n_ops ---
 
 for N in 1 2 3 4; do
