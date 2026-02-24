@@ -1,13 +1,12 @@
 import asyncio
-import hashlib
 import json
 import os
 import random
+
 import fire
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
-from tqdm import tqdm
 from openai.types.chat import ChatCompletionMessageParam
+from tqdm import tqdm
 
 from data import load_raw_data
 from grammar_utils import (
@@ -16,6 +15,7 @@ from grammar_utils import (
     parse_minimal_grammar,
     reconstruct_minimal_grammar,
 )
+from openrouter import call_llm, load_cache, make_client, save_cache
 
 load_dotenv()
 
@@ -134,52 +134,10 @@ def _build_messages(
     return messages
 
 
-def _cache_key(messages: list[ChatCompletionMessageParam], model: str) -> str:
-    key_data = {"messages": messages, "model": model}
-    serialized = json.dumps(key_data, sort_keys=True)
-    return hashlib.sha256(serialized.encode()).hexdigest()
-
-
-def _load_cache(cache_path: str) -> dict:
-    if os.path.exists(cache_path):
-        with open(cache_path) as f:
-            return json.load(f)
-    return {}
-
-
-def _save_cache(cache: dict, cache_path: str) -> None:
-    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-    with open(cache_path, "w") as f:
-        json.dump(cache, f, indent=2)
-
-
-async def _call_llm_async(
-    client: AsyncOpenAI,
-    model: str,
-    messages: list[ChatCompletionMessageParam],
-    cache: dict,
-    semaphore: asyncio.Semaphore,
-) -> str:
-    key = _cache_key(messages, model)
-    if key in cache:
-        return cache[key]
-
-    async with semaphore:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0,
-            max_tokens=1024,
-        )
-    result = (response.choices[0].message.content or "").strip()
-    cache[key] = result
-    return result
-
-
 async def _process_example(
     ex: dict,
     model: str,
-    client: AsyncOpenAI,
+    client,
     icl_examples: list[dict],
     cache: dict,
     semaphore: asyncio.Semaphore,
@@ -193,7 +151,7 @@ async def _process_example(
         return ex, False
 
     messages = _build_messages(ex["query"], grammar, icl_examples)
-    response = await _call_llm_async(client, model, messages, cache, semaphore)
+    response = await call_llm(client, model, messages, cache, semaphore)
 
     predicted = parse_minimal_grammar(response)
     specialized_grammar = replace_generic_rules(grammar, predicted)
@@ -209,10 +167,7 @@ async def _specialize_async(
     cache: dict,
     max_concurrent: int,
 ) -> tuple[list[dict], int, int]:
-    client = AsyncOpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=os.environ["OPENROUTER_API_KEY"],
-    )
+    client = make_client()
     semaphore = asyncio.Semaphore(max_concurrent)
     pbar = tqdm(total=len(test_data), desc="Specializing")
 
@@ -259,14 +214,14 @@ def specialize(
     icl_examples = build_icl_examples(train_data, train_generic_data, n_icl_examples, seed)
     print(f"Selected {len(icl_examples)} ICL examples")
 
-    cache = _load_cache(cache_path)
+    cache = load_cache(cache_path)
     print(f"Loaded cache with {len(cache)} entries")
 
     results, n_specialized, n_skipped = asyncio.run(
         _specialize_async(test_data, model, icl_examples, cache, max_concurrent)
     )
 
-    _save_cache(cache, cache_path)
+    save_cache(cache, cache_path)
 
     output = {"data": results}
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)

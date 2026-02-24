@@ -1,5 +1,4 @@
 import json
-import os
 
 import fire
 import torch
@@ -8,6 +7,7 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from data import format_prompt_messages, load_raw_data
+from eval_utils import check_match, compute_metrics, save_results
 
 
 def evaluate(
@@ -65,7 +65,6 @@ def evaluate(
         prompts.append(text)
 
     results = []
-    correct = 0
 
     for i in tqdm(range(0, len(prompts), batch_size), desc="Evaluating"):
         batch_prompts = prompts[i : i + batch_size]
@@ -88,28 +87,20 @@ def evaluate(
 
         for ex, prompt, pred in zip(batch_examples, batch_prompts, predictions):
             gold = ex["program"]
-            match = gold in pred
-            if match:
-                correct += 1
             results.append(
                 {
                     "prompt": prompt,
                     "gold": gold,
                     "prediction": pred,
-                    "match": match,
+                    "match": check_match(gold, pred),
                 }
             )
 
-    total = len(examples)
-    accuracy = correct / total if total > 0 else 0.0
-    print(f"Accuracy: {accuracy:.4f} ({correct}/{total})")
+    metrics = compute_metrics(results)
+    print(f"Accuracy: {metrics['accuracy']:.4f} ({metrics['correct']}/{metrics['total']})")
 
     if output_path:
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        output = {"accuracy": accuracy, "correct": correct, "total": total, "results": results}
-        with open(output_path, "w") as f:
-            json.dump(output, f, indent=2)
-        print(f"Results saved to {output_path}")
+        save_results(metrics, results, output_path)
 
 
 if __name__ == "__main__":
