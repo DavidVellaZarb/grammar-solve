@@ -64,6 +64,7 @@ async def _evaluate_async(
         gold = ex["program"]
         pbar.update(1)
         return {
+            "prompt": messages,
             "query": ex["query"],
             "gold": gold,
             "prediction": prediction,
@@ -92,7 +93,7 @@ def evaluate(
 
     if output_path is None:
         model_alias = model.split("/")[-1]
-        output_path = f"outputs/icl/{model_alias}_{mode}_k{k}.json"
+        output_path = f"results/icl/{model_alias}_{mode}_k{k}.json"
 
     if cache_path is None:
         cache_path = "cache/icl_cache.json"
