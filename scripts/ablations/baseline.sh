@@ -12,19 +12,19 @@ uv run python src/eval.py \
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_add_rule.json \
+    --test_path data/smcalflow/ablations/test_add_rule.json \
     --output_path "$RESULTS_DIR/test_add_rule.json" \
     "$@"
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_remove_rule.json \
+    --test_path data/smcalflow/ablations/test_remove_rule.json \
     --output_path "$RESULTS_DIR/test_remove_rule.json" \
     "$@"
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_add_remove_rule.json \
+    --test_path data/smcalflow/ablations/test_add_remove_rule.json \
     --output_path "$RESULTS_DIR/test_add_remove_rule.json" \
     "$@"
 

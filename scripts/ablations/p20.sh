@@ -7,7 +7,7 @@ ADAPTER="${HF_NAMESPACE}/qwen2.5-7b_smcalflow-add-rule-p20"
 RESULTS_DIR="results/ablations_p20/add_rule_p20"
 
 uv run python src/train.py \
-    --train_path "data/smcalflow/train_add_rule_p20.json" \
+    --train_path "data/smcalflow/ablations/train_add_rule_p20.json" \
     --hub_model_id "$ADAPTER" \
     "$@"
 
@@ -18,17 +18,17 @@ uv run python src/eval.py \
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_add_rule.json \
+    --test_path data/smcalflow/ablations/test_add_rule.json \
     --output_path "$RESULTS_DIR/test_add_rule.json"
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_remove_rule.json \
+    --test_path data/smcalflow/ablations/test_remove_rule.json \
     --output_path "$RESULTS_DIR/test_remove_rule.json"
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_add_remove_rule.json \
+    --test_path data/smcalflow/ablations/test_add_remove_rule.json \
     --output_path "$RESULTS_DIR/test_add_remove_rule.json"
 
 uv run python src/plot.py \
@@ -45,7 +45,7 @@ ADAPTER="${HF_NAMESPACE}/qwen2.5-7b_smcalflow-remove-rule-p20"
 RESULTS_DIR="results/ablations_p20/remove_rule_p20"
 
 uv run python src/train.py \
-    --train_path "data/smcalflow/train_remove_rule_p20.json" \
+    --train_path "data/smcalflow/ablations/train_remove_rule_p20.json" \
     --hub_model_id "$ADAPTER" \
     "$@"
 
@@ -56,17 +56,17 @@ uv run python src/eval.py \
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_add_rule.json \
+    --test_path data/smcalflow/ablations/test_add_rule.json \
     --output_path "$RESULTS_DIR/test_add_rule.json"
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_remove_rule.json \
+    --test_path data/smcalflow/ablations/test_remove_rule.json \
     --output_path "$RESULTS_DIR/test_remove_rule.json"
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_add_remove_rule.json \
+    --test_path data/smcalflow/ablations/test_add_remove_rule.json \
     --output_path "$RESULTS_DIR/test_add_remove_rule.json"
 
 uv run python src/plot.py \
@@ -83,7 +83,7 @@ ADAPTER="${HF_NAMESPACE}/qwen2.5-7b_smcalflow-add-remove-rule-p20"
 RESULTS_DIR="results/ablations_p20/add_remove_rule_p20"
 
 uv run python src/train.py \
-    --train_path "data/smcalflow/train_add_remove_rule_p20.json" \
+    --train_path "data/smcalflow/ablations/train_add_remove_rule_p20.json" \
     --hub_model_id "$ADAPTER" \
     "$@"
 
@@ -94,17 +94,17 @@ uv run python src/eval.py \
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_add_rule.json \
+    --test_path data/smcalflow/ablations/test_add_rule.json \
     --output_path "$RESULTS_DIR/test_add_rule.json"
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_remove_rule.json \
+    --test_path data/smcalflow/ablations/test_remove_rule.json \
     --output_path "$RESULTS_DIR/test_remove_rule.json"
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
-    --test_path data/smcalflow/test_add_remove_rule.json \
+    --test_path data/smcalflow/ablations/test_add_remove_rule.json \
     --output_path "$RESULTS_DIR/test_add_remove_rule.json"
 
 uv run python src/plot.py \

@@ -14,9 +14,14 @@ for CFG in "${CONFIGS[@]}"; do
     echo "=== Evaluating: ${CFG} ==="
 
     for TEST in "${TEST_SETS[@]}"; do
+        if [[ "$TEST" == "test" ]]; then
+            TEST_PATH="data/smcalflow/${TEST}.json"
+        else
+            TEST_PATH="data/smcalflow/ablations/${TEST}.json"
+        fi
         uv run python src/eval.py \
             --adapter "$ADAPTER" \
-            --test_path "data/smcalflow/${TEST}.json" \
+            --test_path "$TEST_PATH" \
             --output_path "$RESULTS_DIR/${TEST}.json" \
             "$@"
     done
