@@ -7,13 +7,13 @@ from lark import Lark, Token, Tree
 _GENERIC_TERMINALS = frozenset({"ESCAPED_STRING", "NUMBER"})
 
 
-@lru_cache(maxsize=1)
-def _build_parser(grammar_path: str) -> Lark:
+@lru_cache(maxsize=4)
+def _build_parser(grammar_path: str, start: str = "call") -> Lark:
     with open(grammar_path) as f:
         grammar_text = f.read()
     return Lark(
         grammar_text,
-        start="call",
+        start=start,
         parser="earley",
         keep_all_tokens=True,
     )
@@ -23,7 +23,6 @@ def _fix_ambiguity(tree: Tree) -> Tree:
     if not isinstance(tree, Tree):
         return tree
 
-    # Fix: date → day → (adjustByPeriod day period) ⇒ date → (adjustByPeriod date period)
     if tree.data == "date" and len(tree.children) == 1:
         child = tree.children[0]
         if isinstance(child, Tree) and child.data == "day" and child.children:
@@ -82,13 +81,19 @@ def extract_minimal_grammar(
     program: str,
     grammar_path: str = "grammars/smcalflow.lark",
     generic: bool = False,
+    start: str = "call",
+    skip_rules: set[str] | None = None,
 ) -> str:
-    parser = _build_parser(grammar_path)
+    parser = _build_parser(grammar_path, start)
     tree = parser.parse(program)
-    tree = _fix_ambiguity(tree)
+    if "smcalflow" in grammar_path:
+        tree = _fix_ambiguity(tree)
 
     rules: dict[str, list[str]] = {}
     _walk_tree(tree, rules, generic)
+
+    if skip_rules:
+        rules = {k: v for k, v in rules.items() if k not in skip_rules}
 
     lines = [f"{name} ::= {' | '.join(alts)}" for name, alts in rules.items()]
     return "\n".join(lines)
@@ -99,17 +104,24 @@ def add_minimal_grammar(
     output_path: str,
     grammar_path: str = "grammars/smcalflow.lark",
     generic: bool = False,
+    start: str = "call",
+    skip_rules: set[str] | None = None,
+    program_key: str = "program",
 ) -> None:
     with open(input_path) as f:
         data = json.load(f)
 
-    parser = _build_parser(grammar_path)
+    parser = _build_parser(grammar_path, start)
+    apply_fixup = "smcalflow" in grammar_path
 
     for i, entry in enumerate(data["data"]):
-        tree = parser.parse(entry["program"])
-        tree = _fix_ambiguity(tree)
+        tree = parser.parse(entry[program_key])
+        if apply_fixup:
+            tree = _fix_ambiguity(tree)
         rules: dict[str, list[str]] = {}
         _walk_tree(tree, rules, generic)
+        if skip_rules:
+            rules = {k: v for k, v in rules.items() if k not in skip_rules}
         lines = [f"{name} ::= {' | '.join(alts)}" for name, alts in rules.items()]
         entry["minimal_grammar"] = "\n".join(lines)
 

@@ -3,6 +3,8 @@ import re
 GENERIC_TERMINALS = {"ESCAPED_STRING", "NUMBER"}
 ENUM_TERMINALS = {"DAY", "MONTH", "WEEK", "HOLIDAY", "SEASON", "OP"}
 
+VERILOG_GENERIC_TERMINALS = {"IDENTIFIER", "NUMBER"}
+
 
 def has_terminal_reference(alt: str, terminals: set[str]) -> bool:
     stripped = re.sub(r'"[^"]*"', "", alt)
