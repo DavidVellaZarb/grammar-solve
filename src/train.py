@@ -66,10 +66,14 @@ def train(
         task_type=TaskType.CAUSAL_LM,
     )
 
-    if task == "program":
+    if task == "grammar_program":
+        run_type = "grammar_program"
+    elif task == "grammar":
+        run_type = "predict_grammar"
+    elif task == "program":
         run_type = "grammar_guided" if include_grammar else "baseline"
     else:
-        run_type = f"predict_{task}"
+        raise ValueError(f"Unknown task: {task!r}. Expected 'program', 'grammar', or 'grammar_program'.")
     run_name = f"{run_type}_{model_alias}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     sft_config = SFTConfig(

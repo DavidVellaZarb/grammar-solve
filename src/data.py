@@ -18,12 +18,22 @@ SYSTEM_PROMPT_GRAMMAR = (
     "for the query. Output only the grammar, nothing else."
 )
 
+SYSTEM_PROMPT_GRAMMAR_PROGRAM = (
+    "You are a semantic parser. Given a user query, first produce the minimal "
+    "grammar for the query, then produce the corresponding program. Separate "
+    "the grammar and program with a blank line and the label 'Program:'. "
+    "Output only the grammar and program, nothing else."
+)
+
 
 def format_prompt_messages(
     example: dict, include_grammar: bool = True, task: str = "program"
 ) -> list[dict]:
     if task == "grammar":
         system_prompt = SYSTEM_PROMPT_GRAMMAR
+        user_content = f"Query: {example['query']}"
+    elif task == "grammar_program":
+        system_prompt = SYSTEM_PROMPT_GRAMMAR_PROGRAM
         user_content = f"Query: {example['query']}"
     elif include_grammar:
         system_prompt = SYSTEM_PROMPT_WITH_GRAMMAR
@@ -51,17 +61,22 @@ def load_data(
 ) -> Dataset:
     raw = load_raw_data(path)
 
-    completion_key = "minimal_grammar" if task == "grammar" else "program"
-
     records = []
     for ex in raw:
+        if task == "grammar_program":
+            completion = f"{ex['minimal_grammar']}\n\nProgram:\n{ex['program']}"
+        elif task == "grammar":
+            completion = ex["minimal_grammar"]
+        else:
+            completion = ex["program"]
+
         records.append(
             {
                 "prompt": format_prompt_messages(
                     ex, include_grammar=include_grammar, task=task
                 ),
                 "completion": [
-                    {"role": "assistant", "content": ex[completion_key]},
+                    {"role": "assistant", "content": completion},
                 ],
             }
         )

@@ -10,6 +10,9 @@ from data import format_prompt_messages, load_raw_data
 from eval_utils import check_match, compute_metrics, save_results
 
 
+GRAMMAR_PROGRAM_SEPARATOR = "\nProgram:\n"
+
+
 def evaluate(
     adapter: str,
     test_path: str = "data/smcalflow/test.json",
@@ -20,6 +23,7 @@ def evaluate(
     attn_implementation: str = "flash_attention_2",
     grammar_file: str | None = None,
     include_grammar: bool = True,
+    task: str = "program",
 ):
     peft_config = PeftConfig.from_pretrained(adapter)
     base_model_name = model_name or peft_config.base_model_name_or_path
@@ -56,9 +60,12 @@ def evaluate(
     else:
         print("Using gold grammars from test data")
 
+    if task == "grammar_program":
+        include_grammar = False
+
     prompts = []
     for ex in examples:
-        messages = format_prompt_messages(ex, include_grammar=include_grammar)
+        messages = format_prompt_messages(ex, include_grammar=include_grammar, task=task)
         text = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
@@ -87,17 +94,25 @@ def evaluate(
 
         for ex, prompt, pred in zip(batch_examples, batch_prompts, predictions):
             gold = ex["program"]
-            results.append(
-                {
-                    "prompt": prompt,
-                    "gold": gold,
-                    "prediction": pred,
-                    "match": check_match(gold, pred),
-                }
-            )
+            result = {
+                "prompt": prompt,
+                "gold": gold,
+                "prediction": pred,
+                "match": check_match(gold, pred),
+            }
+            if task == "grammar_program":
+                result["separator_found"] = GRAMMAR_PROGRAM_SEPARATOR in pred
+            results.append(result)
 
     metrics = compute_metrics(results)
     print(f"Accuracy: {metrics['accuracy']:.4f} ({metrics['correct']}/{metrics['total']})")
+
+    if task == "grammar_program":
+        sep_count = sum(1 for r in results if r.get("separator_found"))
+        total = len(results)
+        metrics["format_compliance"] = sep_count / total if total > 0 else 0.0
+        metrics["separator_found"] = sep_count
+        print(f"Format compliance: {metrics['format_compliance']:.4f} ({sep_count}/{total})")
 
     if output_path:
         save_results(metrics, results, output_path)
