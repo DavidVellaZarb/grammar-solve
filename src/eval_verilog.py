@@ -30,19 +30,8 @@ def parse_verilog_eval_prompt(prompt: str) -> tuple[str, str]:
     return description, module_header
 
 
-def extract_completion(raw_prediction: str, module_header: str) -> str:
+def extract_completion(raw_prediction: str) -> str:
     pred = raw_prediction.strip()
-
-    header_normalized = module_header.strip()
-    if pred.startswith(header_normalized):
-        pred = pred[len(header_normalized):]
-
-    if pred.lstrip().startswith("module "):
-        endmodule_match = re.search(r"\bendmodule\b", pred)
-        if endmodule_match:
-            semi_pos = pred.find(";")
-            if semi_pos != -1:
-                pred = pred[semi_pos + 1:]
 
     endmodule_match = re.search(r"\bendmodule\b", pred)
     if endmodule_match:
@@ -148,7 +137,6 @@ def evaluate(
         ):
             batch_prompts = formatted_prompts[i : i + batch_size]
             batch_task_ids = task_ids[i : i + batch_size]
-            batch_problems = [problems[tid] for tid in batch_task_ids]
 
             inputs = tokenizer(
                 batch_prompts,
@@ -166,11 +154,8 @@ def evaluate(
                 generated_ids, skip_special_tokens=True
             )
 
-            for tid, problem, pred in zip(
-                batch_task_ids, batch_problems, predictions
-            ):
-                _, module_header = parse_verilog_eval_prompt(problem["prompt"])
-                completion = extract_completion(pred, module_header)
+            for tid, pred in zip(batch_task_ids, predictions):
+                completion = extract_completion(pred)
                 all_samples.append({"task_id": tid, "completion": completion})
 
     print(f"\nGenerated {len(all_samples)} total completions")
