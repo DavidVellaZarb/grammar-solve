@@ -10,10 +10,20 @@ uv run python src/eval_verilog.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_mg-verilog-baseline" \
     --problem_file data/verilog_eval/VerilogEval_Human.jsonl \
     --noinclude_grammar \
-    --output_path results/verilog_eval/baseline.json \
+    --n_samples 5 \
+    --temperature 0.8 \
+    --output_path results/verilog_eval/baseline.json
 
 uv run python src/eval_verilog.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_mg-verilog" \
     --problem_file data/verilog_eval/VerilogEval_Human.jsonl \
     --include_grammar \
-    --output_path results/verilog_eval/grammar.json \
+    --n_samples 5 \
+    --temperature 0.8 \
+    --output_path results/verilog_eval/grammar.json
+
+uv run python src/plot.py plot_pass_at_k \
+    --result_files '["results/verilog_eval/baseline.json", "results/verilog_eval/grammar.json"]' \
+    --labels '["Baseline", "Grammar-Guided (Ours)"]' \
+    --output_path results/verilog_eval/pass_at_k.png \
+    --title "VerilogEval Functional Correctness"

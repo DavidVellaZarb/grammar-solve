@@ -108,5 +108,87 @@ def plot_accuracies(
     print(f"Saved plot to {output_path}")
 
 
+def plot_pass_at_k(
+    result_files: list[str],
+    labels: list[str] | None = None,
+    output_path: str = "results/pass_at_k.png",
+    title: str | None = None,
+):
+    """Plot pass@k metrics from multiple result JSON files as a grouped bar chart.
+
+    Each result file should contain keys like "pass@1", "pass@3", "pass@5".
+
+    Args:
+        result_files: Paths to result JSON files.
+        labels: Display labels for each file. Uses filename stems if None.
+        output_path: Where to save the figure.
+        title: Chart title.
+    """
+    labels = labels or [Path(f).stem for f in result_files]
+
+    all_results = []
+    all_k_values = []
+    for path in result_files:
+        with open(path) as f:
+            data = json.load(f)
+        metrics = {k: v for k, v in data.items() if k.startswith("pass@")}
+        all_results.append(metrics)
+        for k in metrics:
+            if k not in all_k_values:
+                all_k_values.append(k)
+
+    all_k_values.sort(key=lambda x: int(x.split("@")[1]))
+
+    num_k = len(all_k_values)
+    num_methods = len(result_files)
+    bar_width = 0.8 / num_methods if num_methods > 1 else 0.5
+
+    fig, ax = plt.subplots(figsize=(max(6, num_k * 2.5), 5))
+
+    for i, (metrics, label) in enumerate(zip(all_results, labels)):
+        values = [metrics.get(k, 0.0) for k in all_k_values]
+        if num_methods > 1:
+            x_positions = [
+                j + i * bar_width - (num_methods - 1) * bar_width / 2
+                for j in range(num_k)
+            ]
+        else:
+            x_positions = list(range(num_k))
+
+        bars = ax.bar(x_positions, values, bar_width, label=label)
+
+        for bar, val in zip(bars, values):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.01,
+                f"{val:.1%}",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+            )
+
+    ax.set_xticks(range(num_k))
+    ax.set_xticklabels(all_k_values)
+    ax.set_ylabel("Pass Rate")
+    ax.set_ylim(0, min(1.15, max(
+        v for m in all_results for v in m.values()
+    ) * 1.3 + 0.05))
+
+    if title:
+        ax.set_title(title)
+    else:
+        ax.set_title("Functional Correctness (pass@k)")
+
+    if num_methods > 1:
+        ax.legend()
+
+    plt.tight_layout()
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Saved plot to {output_path}")
+
+
 if __name__ == "__main__":
-    fire.Fire(plot_accuracies)
+    fire.Fire({"plot_accuracies": plot_accuracies, "plot_pass_at_k": plot_pass_at_k})

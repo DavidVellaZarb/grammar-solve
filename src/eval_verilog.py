@@ -61,7 +61,7 @@ def evaluate(
     n_samples: int = 1,
     temperature: float = 0.0,
     top_p: float = 0.95,
-    k: str = "1",
+    k: str | None = None,
     n_workers: int = 4,
     timeout: float = 30.0,
     output_path: str | None = None,
@@ -69,7 +69,10 @@ def evaluate(
     include_grammar: bool = False,
     grammar_file: str | None = None,
 ):
-    k_values = [int(x.strip()) for x in k.split(",")]
+    if k is not None:
+        k_values = [int(x.strip()) for x in k.split(",")]
+    else:
+        k_values = sorted(set(v for v in [1, 3, 5, 10, 100] if v <= n_samples))
 
     peft_config = PeftConfig.from_pretrained(adapter)
     base_model_name = model_name or peft_config.base_model_name_or_path
