@@ -11,6 +11,13 @@ from verilog_eval.data import read_problems, write_jsonl
 from verilog_eval.evaluation import evaluate_functional_correctness
 
 from data import format_prompt_messages
+from grammar_parser import extract_minimal_grammar
+
+VERILOG_GRAMMAR_PATH = "grammars/verilog.lark"
+VERILOG_SKIP_RULES = {
+    "start", "module", "list_of_ports", "parameter_list", "port_item",
+    "port_declaration", "port_dir",
+}
 
 
 def parse_verilog_eval_prompt(prompt: str) -> tuple[str, str]:
@@ -88,13 +95,31 @@ def evaluate(
     print(f"Loaded {len(problems)} problems from {problem_file}")
 
     grammar_map = {}
-    if grammar_file:
-        print(f"Using grammars from {grammar_file}")
+    if include_grammar and grammar_file:
+        print(f"Using predicted grammars from {grammar_file}")
         with open(grammar_file) as f:
             grammar_data = json.load(f)["data"]
         for entry in grammar_data:
             key = entry.get("task_id") or entry.get("query")
             grammar_map[key] = entry["minimal_grammar"]
+    elif include_grammar:
+        print("Extracting oracle grammars from canonical solutions...")
+        failures = 0
+        for task_id, problem in problems.items():
+            full_module = problem["prompt"] + problem["canonical_solution"]
+            try:
+                grammar = extract_minimal_grammar(
+                    full_module,
+                    grammar_path=VERILOG_GRAMMAR_PATH,
+                    start="module",
+                    skip_rules=VERILOG_SKIP_RULES,
+                )
+                grammar_map[task_id] = grammar
+            except Exception:
+                grammar_map[task_id] = ""
+                failures += 1
+        print(f"  Extracted {len(grammar_map) - failures}/{len(problems)} grammars "
+              f"({failures} failures)")
 
     task_ids = list(problems.keys())
     formatted_prompts = []
