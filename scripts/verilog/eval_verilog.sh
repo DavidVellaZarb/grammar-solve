@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if ! command -v iverilog &> /dev/null; then
-    echo "Error: iverilog not found. Install: brew install icarus-verilog"
+    echo "Error: iverilog not found. Install: apt-get install -y iverilog"
     exit 1
 fi
 
