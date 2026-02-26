@@ -45,6 +45,12 @@ def format_prompt_messages(
         system_prompt = SYSTEM_PROMPT_WITHOUT_GRAMMAR
         user_content = f"Query: {example['query']}"
 
+    module_header = example.get("module_header")
+    if module_header:
+        user_content = f"Query: {example['query']}\n\nModule header:\n{module_header}"
+        if include_grammar and task not in ("grammar", "grammar_program"):
+            user_content += f"\n\nGrammar:\n{example['minimal_grammar']}"
+
     return [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},

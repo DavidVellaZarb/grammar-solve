@@ -18,9 +18,16 @@ load_dotenv()
 
 
 def _format_user_message(example: dict, mode: str) -> str:
+    parts = [f"Query: {example['query']}"]
+
+    module_header = example.get("module_header")
+    if module_header:
+        parts.append(f"Module header:\n{module_header}")
+
     if mode == "oracle":
-        return f"Query: {example['query']}\n\nGrammar:\n{example['minimal_grammar']}"
-    return f"Query: {example['query']}"
+        parts.append(f"Grammar:\n{example['minimal_grammar']}")
+
+    return "\n\n".join(parts)
 
 
 def _build_messages(
