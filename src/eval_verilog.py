@@ -129,8 +129,13 @@ def evaluate(
 
     for task_id in task_ids:
         problem = problems[task_id]
-        description, module_header = parse_verilog_eval_prompt(problem["prompt"])
-        query = description if description else task_id
+        if "description" not in problem:
+            raise ValueError(
+                f"No 'description' field for task_id '{task_id}'. "
+                "Re-run `uv run python src/load_verilog_eval.py download` to merge descriptions."
+            )
+        _, module_header = parse_verilog_eval_prompt(problem["prompt"])
+        query = problem["description"]
 
         example = {"query": query, "module_header": module_header}
         if include_grammar:
