@@ -28,16 +28,21 @@ def _download_file(url: str, dest: str) -> None:
     print(f"  Done: {dest}")
 
 
-def _load_descriptions(path: str) -> dict[str, str]:
+def _load_descriptions(path: str) -> dict[str, dict[str, str]]:
     descriptions = {}
     with open(path) as f:
         for line in f:
             entry = json.loads(line)
-            descriptions[entry["task_id"]] = entry["detail_description"]
+            desc = {"description": entry["detail_description"]}
+            if "simple_description" in entry:
+                desc["simple_description"] = entry["simple_description"]
+            descriptions[entry["task_id"]] = desc
     return descriptions
 
 
-def _merge_descriptions(problem_path: str, descriptions: dict[str, str]) -> None:
+def _merge_descriptions(
+    problem_path: str, descriptions: dict[str, dict[str, str]]
+) -> None:
     entries = []
     with open(problem_path) as f:
         for line in f:
@@ -55,7 +60,7 @@ def _merge_descriptions(problem_path: str, descriptions: dict[str, str]) -> None
         )
 
     for entry in entries:
-        entry["description"] = descriptions[entry["task_id"]]
+        entry.update(descriptions[entry["task_id"]])
 
     with open(problem_path, "w") as f:
         for entry in entries:
@@ -75,7 +80,6 @@ def download(output_dir: str = "data/verilog_eval") -> None:
         problem_path = os.path.join(output_dir, problem_file)
         desc_path = os.path.join(output_dir, desc_file)
 
-        # Check if descriptions are already merged
         with open(problem_path) as f:
             first = json.loads(f.readline())
         if "description" in first:

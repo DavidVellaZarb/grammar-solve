@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-uv run python src/eval.py \
+if ! command -v iverilog &> /dev/null; then
+    echo "Error: iverilog not found. Install: apt-get install -y iverilog"
+    exit 1
+fi
+
+uv run python src/eval_verilog.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_mg-verilog-baseline" \
-    --test_path data/mg_verilog/test_high_level.json \
+    --problem_file data/verilog/VerilogEval_Human.jsonl \
     --noinclude_grammar \
-    --max_new_tokens 1024 \
+    --n_samples 5 \
+    --temperature 0.8 \
     --output_path results/verilog/baseline.json
 
-uv run python src/eval.py \
+uv run python src/eval_verilog.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_mg-verilog" \
-    --test_path data/mg_verilog/test_high_level.json \
-    --max_new_tokens 1024 \
-    --output_path results/verilog/test.json
+    --problem_file data/verilog/VerilogEval_Human.jsonl \
+    --include_grammar \
+    --n_samples 5 \
+    --temperature 0.8 \
+    --output_path results/verilog/grammar.json
 
-uv run python src/plot.py \
-    --results_dir results \
-    --models '["verilog"]' \
-    --model_labels '{"verilog": "Baseline vs Grammar"}' \
-    --test_labels '{"baseline": "Without Grammar", "test": "With Grammar (Ours)"}' \
-    --output_path results/verilog/baseline_vs_grammar.png
+uv run python src/plot.py plot_pass_at_k \
+    --result_files '["results/verilog/baseline.json", "results/verilog/grammar.json"]' \
+    --labels '["Baseline", "Grammar-Guided (Ours)"]' \
+    --output_path results/verilog/pass_at_k.png \
+    --title "VerilogEval Functional Correctness"

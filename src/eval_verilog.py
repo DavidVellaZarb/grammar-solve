@@ -68,6 +68,7 @@ def evaluate(
     attn_implementation: str = "flash_attention_2",
     include_grammar: bool = False,
     grammar_file: str | None = None,
+    description_type: str = "description",
 ):
     if k is not None:
         k_values = [int(x.strip()) for x in k.split(",")]
@@ -129,13 +130,13 @@ def evaluate(
 
     for task_id in task_ids:
         problem = problems[task_id]
-        if "description" not in problem:
+        if description_type not in problem:
             raise ValueError(
-                f"No 'description' field for task_id '{task_id}'. "
+                f"No '{description_type}' field for task_id '{task_id}'. "
                 "Re-run `uv run python src/load_verilog_eval.py download` to merge descriptions."
             )
         _, module_header = parse_verilog_eval_prompt(problem["prompt"])
-        query = problem["description"]
+        query = problem[description_type]
 
         example = {"query": query, "module_header": module_header}
         if include_grammar:
