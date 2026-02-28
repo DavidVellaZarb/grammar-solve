@@ -8,7 +8,7 @@ fi
 
 uv run python src/eval_verilog.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_mg-verilog-baseline" \
-    --problem_file data/verilog/VerilogEval_Human.jsonl \
+    --problem_file data/verilog_eval/VerilogEval_Human.jsonl \
     --noinclude_grammar \
     --n_samples 5 \
     --temperature 0.8 \
@@ -16,7 +16,7 @@ uv run python src/eval_verilog.py \
 
 uv run python src/eval_verilog.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_mg-verilog" \
-    --problem_file data/verilog/VerilogEval_Human.jsonl \
+    --problem_file data/verilog_eval/VerilogEval_Human.jsonl \
     --include_grammar \
     --n_samples 5 \
     --temperature 0.8 \
