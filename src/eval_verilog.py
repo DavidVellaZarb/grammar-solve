@@ -106,24 +106,24 @@ def evaluate(
         for entry in grammar_data:
             key = entry.get("task_id") or entry.get("query")
             grammar_map[key] = entry["minimal_grammar"]
+        missing = [tid for tid in problems if tid not in grammar_map]
+        if missing:
+            raise ValueError(
+                f"Grammar file is missing {len(missing)} task_ids: "
+                f"{missing[:10]}{'...' if len(missing) > 10 else ''}"
+            )
     elif include_grammar:
         print("Extracting oracle grammars from canonical solutions...")
-        failures = 0
         for task_id, problem in problems.items():
             full_module = problem["prompt"] + problem["canonical_solution"]
-            try:
-                grammar = extract_minimal_grammar(
-                    full_module,
-                    grammar_path=VERILOG_GRAMMAR_PATH,
-                    start="module",
-                    skip_rules=VERILOG_SKIP_RULES,
-                )
-                grammar_map[task_id] = grammar
-            except Exception:
-                grammar_map[task_id] = ""
-                failures += 1
-        print(f"  Extracted {len(grammar_map) - failures}/{len(problems)} grammars "
-              f"({failures} failures)")
+            grammar = extract_minimal_grammar(
+                full_module,
+                grammar_path=VERILOG_GRAMMAR_PATH,
+                start="module",
+                skip_rules=VERILOG_SKIP_RULES,
+            )
+            grammar_map[task_id] = grammar
+        print(f"  Extracted {len(grammar_map)}/{len(problems)} grammars")
 
     task_ids = list(problems.keys())
     formatted_prompts = []
@@ -140,10 +140,7 @@ def evaluate(
 
         example = {"query": query, "module_header": module_header}
         if include_grammar:
-            grammar = grammar_map.get(task_id, "")
-            if not grammar:
-                print(f"Warning: no grammar for {task_id}, using empty")
-            example["minimal_grammar"] = grammar
+            example["minimal_grammar"] = grammar_map[task_id]
 
         messages = format_prompt_messages(
             example, include_grammar=include_grammar, task="program"

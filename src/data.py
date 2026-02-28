@@ -62,6 +62,48 @@ def load_raw_data(path: str) -> list[dict]:
         return json.load(f)["data"]
 
 
+def _extract_module_header(prompt: str) -> str:
+    lines = prompt.split("\n")
+    rest_lines = []
+    found_module = False
+    for line in lines:
+        if not found_module and line.strip().startswith("//"):
+            continue
+        else:
+            found_module = True
+            rest_lines.append(line)
+    return "\n".join(rest_lines).strip()
+
+
+def load_test_data(path: str) -> list[dict]:
+    if path.endswith(".jsonl"):
+        with open(path) as f:
+            examples = [json.loads(line) for line in f if line.strip()]
+    else:
+        examples = load_raw_data(path)
+
+    for i, ex in enumerate(examples):
+        if "query" not in ex and "description" in ex:
+            ex["query"] = ex["description"]
+        if "program" not in ex and "canonical_solution" in ex:
+            ex["program"] = ex["canonical_solution"]
+        if "module_header" not in ex and "prompt" in ex:
+            ex["module_header"] = _extract_module_header(ex["prompt"])
+
+        if "query" not in ex:
+            raise ValueError(
+                f"Example {i} in {path} has no 'query' or 'description' field. "
+                f"Available fields: {list(ex.keys())}"
+            )
+        if "program" not in ex:
+            raise ValueError(
+                f"Example {i} in {path} has no 'program' or 'canonical_solution' field. "
+                f"Available fields: {list(ex.keys())}"
+            )
+
+    return examples
+
+
 def load_data(
     path: str, include_grammar: bool = True, task: str = "program"
 ) -> Dataset:

@@ -4,7 +4,7 @@ from peft import PeftConfig, PeftModel
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from data import format_prompt_messages, load_raw_data
+from data import format_prompt_messages, load_test_data
 from predict_utils import write_output
 
 
@@ -37,7 +37,7 @@ def generate_grammar(
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
 
-    examples = load_raw_data(test_path)
+    examples = load_test_data(test_path)
 
     prompts = []
     for ex in examples:
@@ -69,13 +69,8 @@ def generate_grammar(
         predictions = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
         for ex, pred in zip(batch_examples, predictions):
-            results.append(
-                {
-                    "query": ex["query"],
-                    "minimal_grammar": pred,
-                    "program": ex["program"],
-                }
-            )
+            entry = {**ex, "minimal_grammar": pred}
+            results.append(entry)
 
     write_output(results, output_path)
 
