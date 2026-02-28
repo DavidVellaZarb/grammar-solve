@@ -8,7 +8,7 @@ fi
 
 uv run python src/eval_verilog.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_mg-verilog" \
-    --problem_file data/verilog/VerilogEval_Human.jsonl \
+    --problem_file data/verilog_eval/VerilogEval_Human.jsonl \
     --include_grammar \
     --grammar_file "outputs/predicted_grammars/verilog_generative.json" \
     --n_samples 5 \
