@@ -68,8 +68,8 @@ def generate_grammar(
         generated_ids = output_ids[:, prompt_len:]
         predictions = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
-        for ex, pred in zip(batch_examples, predictions):
-            entry = {**ex, "minimal_grammar": pred}
+        for ex, prompt, pred in zip(batch_examples, batch_prompts, predictions):
+            entry = {**ex, "minimal_grammar": pred, "prompt_text": prompt}
             results.append(entry)
 
     write_output(results, output_path)

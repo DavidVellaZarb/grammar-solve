@@ -185,9 +185,9 @@ def evaluate(
                 generated_ids, skip_special_tokens=True
             )
 
-            for tid, pred in zip(batch_task_ids, predictions):
+            for tid, prompt, pred in zip(batch_task_ids, batch_prompts, predictions):
                 completion = extract_completion(pred)
-                all_samples.append({"task_id": tid, "completion": completion})
+                all_samples.append({"task_id": tid, "completion": completion, "prompt_text": prompt})
 
     print(f"\nGenerated {len(all_samples)} total completions")
 
