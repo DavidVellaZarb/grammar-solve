@@ -12,6 +12,7 @@ from verilog_eval.evaluation import evaluate_functional_correctness
 
 from data import format_prompt_messages
 from grammar_parser import extract_minimal_grammar
+from grammar_utils import VERILOG_GENERIC_TERMINALS
 
 VERILOG_GRAMMAR_PATH = "grammars/verilog.lark"
 VERILOG_SKIP_RULES = {
@@ -69,6 +70,7 @@ def evaluate(
     include_grammar: bool = False,
     grammar_file: str | None = None,
     description_type: str = "description",
+    generic: bool = False,
 ):
     if k is not None:
         k_values = [int(x.strip()) for x in k.split(",")]
@@ -114,6 +116,7 @@ def evaluate(
             )
     elif include_grammar:
         print("Extracting oracle grammars from canonical solutions...")
+        generic_terminals = VERILOG_GENERIC_TERMINALS if generic else None
         for task_id, problem in problems.items():
             full_module = problem["prompt"] + problem["canonical_solution"]
             grammar = extract_minimal_grammar(
@@ -121,6 +124,7 @@ def evaluate(
                 grammar_path=VERILOG_GRAMMAR_PATH,
                 start="module",
                 skip_rules=VERILOG_SKIP_RULES,
+                generic_terminals=generic_terminals,
             )
             grammar_map[task_id] = grammar
         print(f"  Extracted {len(grammar_map)}/{len(problems)} grammars")

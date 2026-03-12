@@ -8,6 +8,7 @@ from huggingface_hub import hf_hub_download
 from sklearn.model_selection import train_test_split
 
 from grammar_parser import _build_parser, _walk_tree
+from grammar_utils import VERILOG_GENERIC_TERMINALS
 
 DESCRIPTION_LEVELS = {
     "high_level": "high_level_global_summary",
@@ -47,14 +48,14 @@ def _parse_description(text: str) -> tuple[str, str]:
     return desc_part, module_header
 
 
-def _extract_grammar(full_module: str, parser) -> str | None:
+def _extract_grammar(full_module: str, parser, generic_terminals: frozenset[str] | None = None) -> str | None:
     try:
         tree = parser.parse(full_module)
     except Exception:
         return None
 
     rules: dict[str, list[str]] = {}
-    _walk_tree(tree, rules, generic=False)
+    _walk_tree(tree, rules, generic_terminals=generic_terminals)
     rules = {k: v for k, v in rules.items() if k not in SKIP_RULES}
     lines = [f"{name} ::= {' | '.join(alts)}" for name, alts in rules.items()]
     return "\n".join(lines)
@@ -66,6 +67,7 @@ def load(
     valid_size: float = 0.1,
     seed: int = 42,
     max_examples: int = 0,
+    generic: bool = False,
 ) -> None:
     print("Loading MG-Verilog dataset from HuggingFace...")
     arrow_path = hf_hub_download(
@@ -110,7 +112,8 @@ def load(
     print("Building Verilog parser...")
     parser = _build_parser(GRAMMAR_PATH, start="module")
 
-    print("Extracting minimal grammars...")
+    generic_terminals = VERILOG_GENERIC_TERMINALS if generic else None
+    print(f"Extracting minimal grammars{' (generic)' if generic else ''}...")
     successes = []
     failures = []
     for ex in examples:
@@ -125,7 +128,7 @@ def load(
         else:
             full_module = code
 
-        grammar = _extract_grammar(full_module, parser)
+        grammar = _extract_grammar(full_module, parser, generic_terminals=generic_terminals)
         if grammar is not None:
             ex["minimal_grammar"] = grammar
             successes.append(ex)
@@ -179,7 +182,8 @@ def load(
                     "program": ex["code"],
                 })
 
-            out_path = os.path.join(output_dir, f"{split_name}_{level_key}.json")
+            suffix = "_generic" if generic else ""
+            out_path = os.path.join(output_dir, f"{split_name}_{level_key}{suffix}.json")
             with open(out_path, "w") as f:
                 json.dump({"data": out_data}, f, indent=2)
             print(f"Wrote {len(out_data)} entries to {out_path}")

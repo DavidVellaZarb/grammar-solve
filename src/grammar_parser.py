@@ -4,7 +4,7 @@ from functools import lru_cache
 import fire
 from lark import Lark, Token, Tree
 
-_GENERIC_TERMINALS = frozenset({"ESCAPED_STRING", "NUMBER"})
+from grammar_utils import GENERIC_TERMINALS
 
 
 @lru_cache(maxsize=4)
@@ -38,7 +38,7 @@ def _fix_ambiguity(tree: Tree) -> Tree:
     return tree
 
 
-def _reconstruct_alt(children: list, generic: bool) -> str:
+def _reconstruct_alt(children: list, generic_terminals: frozenset[str] | None = None) -> str:
     parts: list[str] = []
     token_buf: list[str] = []
 
@@ -49,7 +49,7 @@ def _reconstruct_alt(children: list, generic: bool) -> str:
                 token_buf = []
             parts.append(child.data)
         elif isinstance(child, Token):
-            if generic and child.type in _GENERIC_TERMINALS:
+            if generic_terminals and child.type in generic_terminals:
                 if token_buf:
                     parts.append('"' + "".join(token_buf) + '"')
                     token_buf = []
@@ -63,9 +63,12 @@ def _reconstruct_alt(children: list, generic: bool) -> str:
     return " ".join(parts)
 
 
-def _walk_tree(tree: Tree, rules: dict[str, list[str]], generic: bool) -> None:
+def _walk_tree(tree: Tree, rules: dict[str, list[str]], generic: bool = False, generic_terminals: frozenset[str] | None = None) -> None:
+    if generic_terminals is None and generic:
+        generic_terminals = GENERIC_TERMINALS
+
     rule_name = tree.data
-    alt = _reconstruct_alt(tree.children, generic)
+    alt = _reconstruct_alt(tree.children, generic_terminals)
 
     if rule_name not in rules:
         rules[rule_name] = []
@@ -74,7 +77,7 @@ def _walk_tree(tree: Tree, rules: dict[str, list[str]], generic: bool) -> None:
 
     for child in tree.children:
         if isinstance(child, Tree):
-            _walk_tree(child, rules, generic)
+            _walk_tree(child, rules, generic_terminals=generic_terminals)
 
 
 def extract_minimal_grammar(
@@ -83,14 +86,18 @@ def extract_minimal_grammar(
     generic: bool = False,
     start: str = "call",
     skip_rules: set[str] | None = None,
+    generic_terminals: frozenset[str] | None = None,
 ) -> str:
+    if generic_terminals is None and generic:
+        generic_terminals = GENERIC_TERMINALS
+
     parser = _build_parser(grammar_path, start)
     tree = parser.parse(program)
     if "smcalflow" in grammar_path:
         tree = _fix_ambiguity(tree)
 
     rules: dict[str, list[str]] = {}
-    _walk_tree(tree, rules, generic)
+    _walk_tree(tree, rules, generic_terminals=generic_terminals)
 
     if skip_rules:
         rules = {k: v for k, v in rules.items() if k not in skip_rules}
@@ -107,7 +114,11 @@ def add_minimal_grammar(
     start: str = "call",
     skip_rules: set[str] | None = None,
     program_key: str = "program",
+    generic_terminals: frozenset[str] | None = None,
 ) -> None:
+    if generic_terminals is None and generic:
+        generic_terminals = GENERIC_TERMINALS
+
     with open(input_path) as f:
         data = json.load(f)
 
@@ -119,7 +130,7 @@ def add_minimal_grammar(
         if apply_fixup:
             tree = _fix_ambiguity(tree)
         rules: dict[str, list[str]] = {}
-        _walk_tree(tree, rules, generic)
+        _walk_tree(tree, rules, generic_terminals=generic_terminals)
         if skip_rules:
             rules = {k: v for k, v in rules.items() if k not in skip_rules}
         lines = [f"{name} ::= {' | '.join(alts)}" for name, alts in rules.items()]
