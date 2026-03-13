@@ -22,8 +22,7 @@ for CFG in "${CONFIGS[@]}"; do
         uv run python src/eval.py \
             --adapter "$ADAPTER" \
             --test_path "$TEST_PATH" \
-            --output_path "$RESULTS_DIR/${TEST}.json" \
-            "$@"
+            --output_path "$RESULTS_DIR/${TEST}.json"
     done
 
     uv run python src/plot.py \

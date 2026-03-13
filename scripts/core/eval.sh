@@ -4,20 +4,17 @@ set -euo pipefail
 uv run python src/eval.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_smcalflow-baseline" \
     --noinclude_grammar \
-    --output_path results/baseline/baseline.json \
-    "$@"
+    --output_path results/baseline/baseline.json
 
 uv run python src/eval.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_smcalflow" \
-    --output_path results/baseline/test.json \
-    "$@"
+    --output_path results/baseline/test.json
 
 uv run python src/eval.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_smcalflow-grammar-program" \
     --task grammar_program \
     --max_new_tokens 1024 \
-    --output_path results/baseline/grammar_program.json \
-    "$@"
+    --output_path results/baseline/grammar_program.json
 
 uv run python src/plot.py \
     --results_dir results \

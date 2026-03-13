@@ -9,6 +9,5 @@ for CFG in "${CONFIGS[@]}"; do
     echo "=== Training: ${CFG} ==="
     uv run python src/train.py \
         --train_path "data/smcalflow/ablations/train_add_remove_${CFG}_p20.json" \
-        --hub_model_id "$ADAPTER" \
-        "$@"
+        --hub_model_id "$ADAPTER"
 done

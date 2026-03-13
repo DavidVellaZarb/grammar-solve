@@ -5,5 +5,4 @@ uv run python src/prune_grammar.py \
     grammars/smcalflow.lark \
     data/smcalflow/train.json \
     data/smcalflow/test.json \
-    --dry_run=False \
-    "$@"
+    --dry_run=False

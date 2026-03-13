@@ -4,7 +4,6 @@ set -euo pipefail
 GOLD_GENERIC="data/smcalflow/test_generic.json"
 GOLD_SPECIALIZED="data/smcalflow/test.json"
 
-# k=1
 uv run python src/knn.py predict \
     --k 1 \
     --output_path outputs/predicted_grammars/knn_k1_generic.json
@@ -23,7 +22,6 @@ uv run python src/eval_grammar.py \
     --gold_path "$GOLD_SPECIALIZED" \
     --write
 
-# k=3, union
 uv run python src/knn.py predict \
     --k 3 \
     --strategy union \
@@ -43,7 +41,6 @@ uv run python src/eval_grammar.py \
     --gold_path "$GOLD_SPECIALIZED" \
     --write
 
-# k=3, intersection
 uv run python src/knn.py predict \
     --k 3 \
     --strategy intersection \
