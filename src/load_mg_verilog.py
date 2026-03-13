@@ -7,7 +7,7 @@ from datasets import Dataset
 from huggingface_hub import hf_hub_download
 from sklearn.model_selection import train_test_split
 
-from grammar_parser import _build_parser, _walk_tree
+from grammar_parser import _build_parser, _detect_repetition_rules, _walk_tree
 from grammar_utils import VERILOG_GENERIC_TERMINALS
 
 DESCRIPTION_LEVELS = {
@@ -48,14 +48,31 @@ def _parse_description(text: str) -> tuple[str, str]:
     return desc_part, module_header
 
 
-def _extract_grammar(full_module: str, parser, generic_terminals: frozenset[str] | None = None) -> str | None:
+def _extract_grammar(
+    full_module: str,
+    parser,
+    generic_terminals: frozenset[str] | None = None,
+    normalize_repetition: bool = True,
+) -> str | None:
     try:
         tree = parser.parse(full_module)
     except Exception:
         return None
 
+    rep_rules = _detect_repetition_rules(GRAMMAR_PATH) if normalize_repetition else None
+    element_types = {} if normalize_repetition else None
+
     rules: dict[str, list[str]] = {}
-    _walk_tree(tree, rules, generic_terminals=generic_terminals)
+    _walk_tree(tree, rules, generic_terminals=generic_terminals,
+               repetition_rules=rep_rules, element_types=element_types)
+
+    if element_types:
+        for elem_name, types in element_types.items():
+            rules.setdefault(elem_name, [])
+            for t in sorted(types):
+                if t not in rules[elem_name]:
+                    rules[elem_name].append(t)
+
     rules = {k: v for k, v in rules.items() if k not in SKIP_RULES}
     lines = [f"{name} ::= {' | '.join(alts)}" for name, alts in rules.items()]
     return "\n".join(lines)
@@ -68,6 +85,7 @@ def load(
     seed: int = 42,
     max_examples: int = 0,
     generic: bool = False,
+    normalize_repetition: bool = True,
 ) -> None:
     print("Loading MG-Verilog dataset from HuggingFace...")
     arrow_path = hf_hub_download(
@@ -128,7 +146,8 @@ def load(
         else:
             full_module = code
 
-        grammar = _extract_grammar(full_module, parser, generic_terminals=generic_terminals)
+        grammar = _extract_grammar(full_module, parser, generic_terminals=generic_terminals,
+                                   normalize_repetition=normalize_repetition)
         if grammar is not None:
             ex["minimal_grammar"] = grammar
             successes.append(ex)
