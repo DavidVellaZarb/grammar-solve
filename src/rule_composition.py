@@ -22,6 +22,8 @@ DATASET_CONFIGS = {
     "smcalflow": {
         "train_path": "data/smcalflow/train.json",
         "test_path": "data/smcalflow/test.json",
+        "train_generic_path": "data/smcalflow/train_generic.json",
+        "test_generic_path": "data/smcalflow/test_generic.json",
         "grammar_path": "grammars/smcalflow.lark",
         "start": "call",
         "skip_rules": None,
@@ -30,6 +32,8 @@ DATASET_CONFIGS = {
     "verilog": {
         "train_path": "data/mg_verilog/train_detailed.json",
         "test_path": "data/verilog_eval/VerilogEval_Human.jsonl",
+        "train_generic_path": "data/mg_verilog/train_detailed_generic.json",
+        "test_generic_path": "data/verilog_eval/VerilogEval_Human.jsonl",
         "grammar_path": "grammars/verilog.lark",
         "start": "module",
         "skip_rules": VERILOG_SKIP_RULES,
@@ -247,5 +251,216 @@ def analyze(
     print(f"Output written to {output_path}")
 
 
+def _load_data(path: str) -> list[dict]:
+    if path.endswith(".jsonl"):
+        with open(path) as f:
+            return [json.loads(line) for line in f]
+    with open(path) as f:
+        return json.load(f)["data"]
+
+
+def _load_rule_sets(
+    data: list[dict], dataset: str, config: dict,
+) -> list[set[str]]:
+    has_grammar = "minimal_grammar" in data[0] and data[0]["minimal_grammar"]
+
+    if has_grammar:
+        rule_sets = []
+        for entry in data:
+            rules = parse_minimal_grammar(entry["minimal_grammar"])
+            alts = set()
+            for name, alternatives in rules.items():
+                for alt in alternatives:
+                    alts.add(f"{name} ::= {alt}")
+            rule_sets.append(alts)
+        return rule_sets
+
+    programs = []
+    for entry in data:
+        if "canonical_solution" in entry:
+            programs.append(entry["prompt"] + entry["canonical_solution"])
+        elif dataset == "verilog" and "module_header" in entry:
+            programs.append(entry["module_header"] + "\n" + entry["program"])
+        else:
+            programs.append(entry["program"])
+
+    rule_sets = []
+    failures = 0
+    for program in tqdm(programs, desc="  Extracting grammars"):
+        try:
+            text = extract_minimal_grammar(
+                program,
+                grammar_path=config["grammar_path"],
+                start=config["start"],
+                skip_rules=config["skip_rules"],
+                generic_terminals=config["generic_terminals"],
+            )
+            rules = parse_minimal_grammar(text)
+            alts = set()
+            for name, alternatives in rules.items():
+                for alt in alternatives:
+                    alts.add(f"{name} ::= {alt}")
+            rule_sets.append(alts)
+        except Exception:
+            failures += 1
+            rule_sets.append(set())
+
+    if failures:
+        print(f"  {failures}/{len(programs)} extraction failures")
+    return rule_sets
+
+
+def analyze_knn(
+    dataset: str,
+    rule_composition_path: str | None = None,
+    train_path: str | None = None,
+    test_path: str | None = None,
+    model_name: str = "BAAI/bge-large-en-v1.5",
+    k_values: list[int] | None = None,
+    min_test_df: float = 0.05,
+    max_train_df: float = 0.15,
+    cache_dir: str = "cache/knn",
+    output_path: str | None = None,
+) -> None:
+    from knn import _find_knn, _load_or_compute_embeddings
+    from sentence_transformers import SentenceTransformer
+
+    if k_values is None:
+        k_values = [1, 4, 8, 16]
+
+    if dataset not in DATASET_CONFIGS:
+        raise ValueError(f"Unknown dataset: {dataset}. Choose from {list(DATASET_CONFIGS.keys())}")
+
+    config = DATASET_CONFIGS[dataset]
+
+    if rule_composition_path is None:
+        rule_composition_path = f"results/analysis/{dataset}_rule_composition.json"
+
+    with open(rule_composition_path) as f:
+        composition = json.load(f)
+
+    rare_rules = [
+        r for r in composition["rare_in_train_rules"]
+        if r["test_df"] >= min_test_df and r["train_df"] < max_train_df
+    ]
+    print(f"Rules with test_df >= {min_test_df} and train_df < {max_train_df}: {len(rare_rules)}")
+    for r in rare_rules:
+        print(f"  {r['rule']}  (train_df={r['train_df']}, test_df={r['test_df']})")
+    print()
+
+    train_path = train_path or config.get("train_generic_path") or config["train_path"]
+    test_path = test_path or config.get("test_generic_path") or config["test_path"]
+
+    print(f"Loading data...")
+    print(f"  Train: {train_path}")
+    print(f"  Test:  {test_path}")
+    train_data = _load_data(train_path)
+    test_data = _load_data(test_path)
+    print(f"  Train: {len(train_data)}, Test: {len(test_data)}")
+    print()
+
+    print("Building rule sets...")
+    train_rule_sets = _load_rule_sets(train_data, dataset, config)
+    test_rule_sets = _load_rule_sets(test_data, dataset, config)
+    print()
+
+    train_queries = [
+        entry.get("query") or entry.get("prompt", "")
+        for entry in train_data
+    ]
+    test_queries = [
+        entry.get("query") or entry.get("prompt", "")
+        for entry in test_data
+    ]
+
+    print(f"Computing embeddings (model: {model_name})...")
+    model = SentenceTransformer(model_name)
+    train_embeddings = _load_or_compute_embeddings(
+        train_queries, model, cache_dir, model_name,
+    )
+    test_embeddings = _load_or_compute_embeddings(
+        test_queries, model, cache_dir, model_name,
+    )
+    print()
+
+    max_k = max(k_values)
+    print(f"Finding {max_k}-NN...")
+    knn_indices = _find_knn(test_embeddings, train_embeddings, max_k)
+    print()
+
+    print(f"Analyzing rule recovery...")
+    results_rules = []
+    for rule_info in rare_rules:
+        rule = rule_info["rule"]
+        test_indices = [i for i, rs in enumerate(test_rule_sets) if rule in rs]
+        total = len(test_indices)
+
+        per_k = {}
+        for k in sorted(k_values):
+            recovered = 0
+            for i in test_indices:
+                neighbors = knn_indices[i, :k]
+                if any(rule in train_rule_sets[idx] for idx in neighbors):
+                    recovered += 1
+            per_k[str(k)] = {
+                "recovered": recovered,
+                "total": total,
+                "recall": round(recovered / total, 4) if total > 0 else 0.0,
+            }
+
+        results_rules.append({
+            "rule": rule,
+            "train_df": rule_info["train_df"],
+            "test_df": rule_info["test_df"],
+            "test_count": total,
+            "results": per_k,
+        })
+
+    output = {
+        "config": {
+            "dataset": dataset,
+            "train_path": train_path,
+            "test_path": test_path,
+            "model_name": model_name,
+            "k_values": k_values,
+            "min_test_df": min_test_df,
+            "max_train_df": max_train_df,
+        },
+        "summary": {
+            "n_rules_analyzed": len(rare_rules),
+            "n_train": len(train_data),
+            "n_test": len(test_data),
+        },
+        "rules": results_rules,
+    }
+
+    if output_path is None:
+        output_path = f"results/analysis/{dataset}_knn.json"
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(output, f, indent=2)
+
+    print()
+    print(f"=== KNN Rule Recovery ({dataset}) ===")
+    print(f"Rules analyzed: {len(rare_rules)}")
+    print()
+    for r in results_rules:
+        print(f"  {r['rule']}")
+        print(f"    train_df={r['train_df']}, test_df={r['test_df']}, test_count={r['test_count']}")
+        for k_str, res in r["results"].items():
+            print(f"    k={k_str}: {res['recovered']}/{res['total']} = {res['recall']:.1%}")
+        print()
+
+    print("  Aggregate recall (macro avg across rules):")
+    for k in sorted(k_values):
+        recalls = [r["results"][str(k)]["recall"] for r in results_rules]
+        avg = sum(recalls) / len(recalls) if recalls else 0.0
+        print(f"    k={k}: {avg:.1%}")
+    print()
+
+    print(f"Output written to {output_path}")
+
+
 if __name__ == "__main__":
-    fire.Fire({"analyze": analyze})
+    fire.Fire({"analyze": analyze, "analyze_knn": analyze_knn})
