@@ -13,3 +13,10 @@ uv run python src/train.py \
     --valid_path "data/smcalflow/valid_balanced.json" \
     --output_dir "outputs/qwen2.5-7b-lora-balanced" \
     --hub_model_id "${HF_NAMESPACE}/qwen2.5-7b_smcalflow_balanced"
+
+uv run python src/train.py \
+    --task grammar \
+    --train_path "data/smcalflow/train_balanced.json" \
+    --valid_path "data/smcalflow/valid_balanced.json" \
+    --output_dir "outputs/qwen2.5-7b-lora-balanced-grammar" \
+    --hub_model_id "${HF_NAMESPACE}/qwen2.5-7b_smcalflow_balanced-grammar"
