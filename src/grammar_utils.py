@@ -10,6 +10,14 @@ VERILOG_GENERIC_TERMINALS = frozenset({
     "MACRO_USAGE", "SYSTEM_TASK", "PREPROC_DIRECTIVE",
 })
 
+SPICE_GENERIC_TERMINALS = frozenset({
+    "IDENTIFIER",
+    "COMP_R", "COMP_C", "COMP_L", "COMP_V", "COMP_I",
+    "COMP_D", "COMP_M", "COMP_Q", "COMP_J", "COMP_X", "COMP_K",
+    "SI_VALUE", "NUMBER", "EXPRESSION",
+    "NODE_ZERO",
+})
+
 
 def has_terminal_reference(alt: str, terminals: set[str]) -> bool:
     stripped = re.sub(r'"[^"]*"', "", alt)
