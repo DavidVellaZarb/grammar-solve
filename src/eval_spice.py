@@ -45,16 +45,15 @@ def check_syntax_validity(netlist: str) -> bool:
         return False
 
 
-# Number of net/node connections per component type (before value/model fields)
 _COMP_NODE_COUNT = {
     "R": 2, "C": 2, "L": 2,
     "V": 2, "I": 2,
     "D": 2,
-    "Q": 3,  # collector, base, emitter (optional substrate handled by +1 heuristic)
-    "M": 4,  # drain, gate, source, bulk
-    "J": 3,  # drain, gate, source
-    "K": 0,  # coupled inductor: K1 L1 L2 value (L1/L2 are inductor names, not nets)
-    "X": -1, # subcircuit: variable number of nodes
+    "Q": 3,
+    "M": 4,
+    "J": 3,
+    "K": 0,
+    "X": -1,
 }
 
 
@@ -74,14 +73,11 @@ def _netlist_to_graph(netlist: str) -> nx.Graph:
 
         n_nodes = _COMP_NODE_COUNT.get(comp_type, 2)
         if n_nodes == -1:
-            # Subcircuit call: all tokens until last non-param token are nodes,
-            # last one is subcircuit name. Take all except name and last non-'=' token.
             node_parts = []
             for part in parts[1:]:
                 if "=" in part:
                     break
                 node_parts.append(part)
-            # Last one is subcircuit name, rest are nets
             if len(node_parts) > 1:
                 node_parts = node_parts[:-1]
         else:
@@ -112,8 +108,7 @@ def compute_ged_similarity(gold_netlist: str, pred_netlist: str, timeout: float 
         return 0.0 if attrs1.get("type") == attrs2.get("type") else 1.0
 
     try:
-        # optimize_graph_edit_distance yields increasingly better upper bounds
-        best_ged = ged_max  # worst case
+        best_ged = ged_max
         import signal
 
         class TimeoutError(Exception):
@@ -231,7 +226,6 @@ def evaluate(
     else:
         print("Using gold grammars from test data")
 
-    # Check ngspice availability
     has_ngspice = shutil.which("ngspice") is not None
     if not has_ngspice:
         print("Warning: ngspice not found on PATH, simulation_success will be 0")
@@ -272,15 +266,12 @@ def evaluate(
             exact_match = gold in pred
             valid = check_syntax_validity(pred_netlist)
 
-            # GED similarity (primary metric)
             ged_sim = compute_ged_similarity(gold, pred_netlist, timeout=ged_timeout)
 
-            # Simulation
             sim_success = False
             if has_ngspice:
                 sim_success = run_ngspice_simulation(pred_netlist, timeout=ngspice_timeout)
 
-            # BLEU (secondary)
             gold_tokens = gold.split()
             pred_tokens = pred_netlist.split()
             bleu = sentence_bleu(
@@ -289,7 +280,6 @@ def evaluate(
                 smoothing_function=SmoothingFunction().method1,
             )
 
-            # Component type match (secondary)
             gold_comp = extract_component_types(gold)
             pred_comp = extract_component_types(pred_netlist)
             comp_metrics = compute_component_f1(gold_comp, pred_comp)
@@ -318,7 +308,6 @@ def evaluate(
     comp_f1s = [r["component_f1"] for r in results]
 
     metrics = {
-        "accuracy": sum(ged_sims) / len(ged_sims) if ged_sims else 0.0,
         "ged_similarity": sum(ged_sims) / len(ged_sims) if ged_sims else 0.0,
         "simulation_success": sim_count / total if total > 0 else 0.0,
         "syntax_validity": valid_count / total if total > 0 else 0.0,

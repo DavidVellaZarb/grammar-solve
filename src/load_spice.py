@@ -33,12 +33,10 @@ def _preprocess_netlist(raw: str) -> str:
         else:
             merged.append(stripped)
 
-    # Ensure netlist ends with .end
     has_end = any(l.strip().lower() == ".end" for l in merged)
     if not has_end:
         merged.append(".end")
 
-    # Collapse multiple spaces
     result = "\n".join(re.sub(r"[ \t]+", " ", l) for l in merged)
     return result
 
@@ -52,7 +50,6 @@ def _extract_grammar(
     """Preprocess, parse, walk tree, return BNF minimal grammar."""
     preprocessed = _preprocess_netlist(netlist)
 
-    # Filter out degenerate netlists (title + .end only)
     non_empty_lines = [l for l in preprocessed.splitlines()
                        if l.strip() and l.strip().lower() != ".end"]
     if len(non_empty_lines) <= 1:
