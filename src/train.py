@@ -70,10 +70,12 @@ def train(
         run_type = "grammar_program"
     elif task == "grammar":
         run_type = "predict_grammar"
+    elif task == "grammar_cot":
+        run_type = "predict_grammar_cot"
     elif task == "program":
         run_type = "grammar_guided" if include_grammar else "baseline"
     else:
-        raise ValueError(f"Unknown task: {task!r}. Expected 'program', 'grammar', or 'grammar_program'.")
+        raise ValueError(f"Unknown task: {task!r}. Expected 'program', 'grammar', 'grammar_cot', or 'grammar_program'.")
     run_name = f"{run_type}_{model_alias}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     sft_config = SFTConfig(

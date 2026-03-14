@@ -25,12 +25,24 @@ SYSTEM_PROMPT_GRAMMAR_PROGRAM = (
     "Output only the grammar and program, nothing else."
 )
 
+SYSTEM_PROMPT_GRAMMAR_COT = (
+    "You are a semantic parser. Given a user query, reason step-by-step about "
+    "which grammar rules are needed to parse the query, then output the minimal "
+    "grammar wrapped in <grammar> tags.\n\n"
+    "First, explain your reasoning about why specific rules are needed. "
+    "Then output the grammar inside <grammar>...</grammar> tags.\n"
+    "Output only the reasoning and grammar, nothing else."
+)
+
 
 def format_prompt_messages(
     example: dict, include_grammar: bool = True, task: str = "program"
 ) -> list[dict]:
     if task == "grammar":
         system_prompt = SYSTEM_PROMPT_GRAMMAR
+        user_content = f"Query: {example['query']}"
+    elif task == "grammar_cot":
+        system_prompt = SYSTEM_PROMPT_GRAMMAR_COT
         user_content = f"Query: {example['query']}"
     elif task == "grammar_program":
         system_prompt = SYSTEM_PROMPT_GRAMMAR_PROGRAM
@@ -48,7 +60,7 @@ def format_prompt_messages(
     module_header = example.get("module_header")
     if module_header:
         user_content = f"Query: {example['query']}\n\nModule header:\n{module_header}"
-        if include_grammar and task not in ("grammar", "grammar_program"):
+        if include_grammar and task not in ("grammar", "grammar_cot", "grammar_program"):
             user_content += f"\n\nGrammar:\n{example['minimal_grammar']}"
 
     return [
@@ -115,6 +127,8 @@ def load_data(
             completion = f"{ex['minimal_grammar']}\n\nProgram:\n{ex['program']}"
         elif task == "grammar":
             completion = ex["minimal_grammar"]
+        elif task == "grammar_cot":
+            completion = ex["grammar_cot"]
         else:
             completion = ex["program"]
 

@@ -3,7 +3,7 @@ import json
 import fire
 
 from data import load_raw_data
-from grammar_utils import parse_minimal_grammar
+from grammar_utils import extract_grammar_from_output, parse_minimal_grammar
 
 
 def compare_grammars(
@@ -60,7 +60,8 @@ def evaluate(
         )
 
         result = compare_grammars(
-            pred_ex["minimal_grammar"], gold_ex["minimal_grammar"]
+            extract_grammar_from_output(pred_ex["minimal_grammar"]),
+            extract_grammar_from_output(gold_ex["minimal_grammar"]),
         )
 
         if write:

@@ -1,6 +1,14 @@
 import re
 
 GENERIC_TERMINALS = frozenset({"ESCAPED_STRING", "NUMBER"})
+
+
+def extract_grammar_from_output(text: str) -> str:
+    match = re.search(r"<grammar>\s*(.*?)\s*</grammar>", text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return text.strip()
+
 ENUM_TERMINALS = {"DAY", "MONTH", "WEEK", "HOLIDAY", "SEASON", "OP"}
 
 VERILOG_GENERIC_TERMINALS = frozenset({

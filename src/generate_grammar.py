@@ -16,6 +16,7 @@ def generate_grammar(
     batch_size: int = 8,
     max_new_tokens: int = 512,
     attn_implementation: str = "flash_attention_2",
+    task: str = "grammar",
 ):
     peft_config = PeftConfig.from_pretrained(adapter)
     base_model_name = model_name or peft_config.base_model_name_or_path
@@ -41,7 +42,7 @@ def generate_grammar(
 
     prompts = []
     for ex in examples:
-        messages = format_prompt_messages(ex, task="grammar")
+        messages = format_prompt_messages(ex, task=task)
         text = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
