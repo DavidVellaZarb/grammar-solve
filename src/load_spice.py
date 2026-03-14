@@ -4,7 +4,6 @@ import re
 import statistics
 
 import fire
-from datasets import load_dataset
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
@@ -89,8 +88,16 @@ def load(
     normalize_repetition: bool = True,
 ) -> None:
     print("Loading Masala-CHAI dataset from HuggingFace...")
-    ds = load_dataset("bhatvineet/masala-chai")
-    data = ds["all"] if "all" in ds else ds[list(ds.keys())[0]]
+    from datasets import Dataset
+    from huggingface_hub import hf_hub_download
+
+    parquet_path = hf_hub_download(
+        repo_id="bhatvineet/masala-chai",
+        filename="data/all-00000-of-00001.parquet",
+        repo_type="dataset",
+    )
+    data = Dataset.from_parquet(parquet_path)
+    assert isinstance(data, Dataset)
     if max_examples > 0:
         data = data.select(range(min(max_examples, len(data))))
     print(f"Loaded {len(data)} examples")
@@ -105,7 +112,7 @@ def load(
     failures = []
     netlist_lengths: list[int] = []
 
-    for i, example in tqdm(enumerate(data), total=len(data), desc="Processing"):
+    for i, example in tqdm(enumerate(data.to_list()), total=len(data), desc="Processing"):
         query = example["description"]
         netlist = example["spice"]
 
