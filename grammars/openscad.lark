@@ -1,0 +1,132 @@
+program: (statement)*
+
+?statement: assignment
+          | module_def
+          | function_def
+          | module_call
+          | if_statement
+          | for_statement
+          | let_statement
+          | use_statement
+          | include_statement
+          | COMMENT
+
+assignment: IDENTIFIER "=" expr ";"
+          | SPECIAL_VAR "=" expr ";"
+
+module_def: "module" IDENTIFIER "(" param_list? ")" "{" (statement)* "}"
+
+function_def: "function" IDENTIFIER "(" param_list? ")" "=" expr ";"
+
+param_list: param ("," param)*
+
+param: IDENTIFIER ("=" expr)?
+
+module_call: module_name "(" arg_list? ")" (block | ";")
+           | "!" module_name "(" arg_list? ")" (block | ";")
+           | "#" module_name "(" arg_list? ")" (block | ";")
+           | "%" module_name "(" arg_list? ")" (block | ";")
+           | "*" module_name "(" arg_list? ")" (block | ";")
+
+block: "{" (statement)* "}"
+     | statement
+
+module_name: IDENTIFIER
+
+arg_list: arg ("," arg)*
+
+arg: IDENTIFIER "=" expr
+   | SPECIAL_VAR "=" expr
+   | expr
+
+if_statement: "if" "(" expr ")" block ("else" block)?
+
+for_statement: "for" "(" for_assignments ")" block
+             | "intersection_for" "(" for_assignments ")" block
+
+for_assignments: for_assignment ("," for_assignment)*
+
+for_assignment: IDENTIFIER "=" expr
+
+let_statement: "let" "(" let_assignments ")" block
+
+let_assignments: let_assignment ("," let_assignment)*
+
+let_assignment: IDENTIFIER "=" expr
+
+use_statement: "use" USE_PATH
+
+include_statement: "include" USE_PATH
+
+?expr: ternary_expr
+
+?ternary_expr: or_expr "?" ternary_expr ":" ternary_expr
+             | or_expr
+
+?or_expr: or_expr "||" and_expr
+        | and_expr
+
+?and_expr: and_expr "&&" comp_expr
+         | comp_expr
+
+?comp_expr: comp_expr "==" add_expr
+          | comp_expr "!=" add_expr
+          | comp_expr "<" add_expr
+          | comp_expr ">" add_expr
+          | comp_expr "<=" add_expr
+          | comp_expr ">=" add_expr
+          | add_expr
+
+?add_expr: add_expr "+" mul_expr
+         | add_expr "-" mul_expr
+         | mul_expr
+
+?mul_expr: mul_expr "*" unary_expr
+         | mul_expr "/" unary_expr
+         | mul_expr "%" unary_expr
+         | unary_expr
+
+?unary_expr: "-" unary_expr
+           | "!" unary_expr
+           | "+" unary_expr
+           | postfix_expr
+
+?postfix_expr: postfix_expr "[" expr "]"
+             | postfix_expr "." IDENTIFIER
+             | primary_expr
+
+?primary_expr: NUMBER
+             | ESCAPED_STRING
+             | "true" -> true_literal
+             | "false" -> false_literal
+             | "undef" -> undef_literal
+             | IDENTIFIER "(" arg_list? ")" -> function_call
+             | IDENTIFIER
+             | SPECIAL_VAR
+             | list_expr
+             | range_expr
+             | "(" expr ")"
+
+list_expr: "[" list_items? "]"
+
+list_items: expr ("," expr)* ","?
+
+range_expr: "[" expr ":" expr "]"
+          | "[" expr ":" expr ":" expr "]"
+
+SPECIAL_VAR: "$fn" | "$fa" | "$fs" | "$t" | "$vpr" | "$vpt" | "$vpd" | "$vpf" | "$children" | "$preview"
+
+USE_PATH: "<" /[^>]+/ ">"
+
+COMMENT: /\/\/[^\n]*/
+       | /\/\*[\s\S]*?\*\//
+
+IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9_]*/
+
+NUMBER: /[0-9]+\.?[0-9]*([eE][+-]?[0-9]+)?/
+      | /\.[0-9]+([eE][+-]?[0-9]+)?/
+
+%import common.ESCAPED_STRING
+
+%ignore /[ \t\n\r]+/
+%ignore COMMENT

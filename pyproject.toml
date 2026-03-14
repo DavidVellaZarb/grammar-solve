@@ -26,6 +26,7 @@ dependencies = [
     "sentencepiece>=0.2.1",
     "rdkit>=2023.9.1",
     "nltk>=3.8",
+    "trimesh>=4.11.3",
 ]
 
 [tool.pytest.ini_options]

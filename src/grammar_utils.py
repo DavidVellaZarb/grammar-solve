@@ -26,6 +26,8 @@ SPICE_GENERIC_TERMINALS = frozenset({
     "NODE_ZERO",
 })
 
+OPENSCAD_GENERIC_TERMINALS = frozenset({"NUMBER", "ESCAPED_STRING"})
+
 
 def has_terminal_reference(alt: str, terminals: set[str]) -> bool:
     stripped = re.sub(r'"[^"]*"', "", alt)
