@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import statistics
 
 import fire
@@ -74,8 +75,10 @@ def load(
     code_lengths: list[int] = []
 
     for i, example in tqdm(enumerate(data), total=len(data), desc="Processing"):
-        query = example.get("prompt") or example.get("description") or example.get("text")
-        code = example.get("response") or example.get("code") or example.get("scad")
+        query = example.get("fakeprompt") or example.get("prompt") or example.get("description")
+        raw_scad = example.get("scad") or example.get("code") or ""
+        blocks = re.findall(r"```\n(.*?)```", raw_scad, re.DOTALL)
+        code = blocks[-1].strip() if blocks else raw_scad.strip()
 
         if not query or not code:
             failures.append({"index": i, "reason": "empty description or code"})

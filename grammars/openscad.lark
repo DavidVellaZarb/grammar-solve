@@ -9,31 +9,35 @@ program: (statement)*
           | let_statement
           | use_statement
           | include_statement
-          | COMMENT
+          | bare_block
+          | ";"
+
+bare_block: "{" (statement)* "}"
 
 assignment: IDENTIFIER "=" expr ";"
           | SPECIAL_VAR "=" expr ";"
 
 module_def: "module" IDENTIFIER "(" param_list? ")" "{" (statement)* "}"
+          | "module" IDENTIFIER "(" param_list? ")" module_call
+          | "module" IDENTIFIER "(" param_list? ")" ";"
 
 function_def: "function" IDENTIFIER "(" param_list? ")" "=" expr ";"
 
 param_list: param ("," param)*
 
 param: IDENTIFIER ("=" expr)?
+     | SPECIAL_VAR ("=" expr)?
 
-module_call: module_name "(" arg_list? ")" (block | ";")
-           | "!" module_name "(" arg_list? ")" (block | ";")
-           | "#" module_name "(" arg_list? ")" (block | ";")
-           | "%" module_name "(" arg_list? ")" (block | ";")
-           | "*" module_name "(" arg_list? ")" (block | ";")
+module_call: modifier? module_name "(" arg_list? ")" (block | ";"+)
 
-block: "{" (statement)* "}"
+modifier: "!" | "#" | "%" | "*"
+
+block: "{" (statement)* "}" ";"?
      | statement
 
 module_name: IDENTIFIER
 
-arg_list: arg ("," arg)*
+arg_list: arg ("," arg?)*
 
 arg: IDENTIFIER "=" expr
    | SPECIAL_VAR "=" expr
@@ -54,9 +58,9 @@ let_assignments: let_assignment ("," let_assignment)*
 
 let_assignment: IDENTIFIER "=" expr
 
-use_statement: "use" USE_PATH
+use_statement: "use" USE_PATH ";"?
 
-include_statement: "include" USE_PATH
+include_statement: "include" USE_PATH ";"?
 
 ?expr: ternary_expr
 
@@ -109,19 +113,19 @@ include_statement: "include" USE_PATH
 
 list_expr: "[" list_items? "]"
 
-list_items: expr ("," expr)* ","?
+list_items: expr ("," expr?)* ","?
 
 range_expr: "[" expr ":" expr "]"
           | "[" expr ":" expr ":" expr "]"
 
-SPECIAL_VAR: "$fn" | "$fa" | "$fs" | "$t" | "$vpr" | "$vpt" | "$vpd" | "$vpf" | "$children" | "$preview"
+SPECIAL_VAR: /\$[a-zA-Z_][a-zA-Z0-9_]*/
 
 USE_PATH: "<" /[^>]+/ ">"
 
 COMMENT: /\/\/[^\n]*/
        | /\/\*[\s\S]*?\*\//
 
-IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9_]*/
+IDENTIFIER: /[a-zA-Z_0-9][a-zA-Z0-9_]*/
 
 NUMBER: /[0-9]+\.?[0-9]*([eE][+-]?[0-9]+)?/
       | /\.[0-9]+([eE][+-]?[0-9]+)?/
