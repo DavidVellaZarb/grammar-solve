@@ -14,14 +14,10 @@ GENERATIVE_OUT="outputs/predicted_grammars/balanced_generative.json"
 CLASSIFIER_GENERIC_OUT="outputs/predicted_grammars/balanced_classifier_t0.5_generic.json"
 CLASSIFIER_SPECIALIZED_OUT="outputs/predicted_grammars/balanced_classifier_t0.5_specialized.json"
 
-# --- Step 1: Generate grammars with generative model ---
-
 uv run python src/generate_grammar.py \
     --adapter "$GRAMMAR_ADAPTER" \
     --test_path "$TEST_PATH" \
     --output_path "$GENERATIVE_OUT"
-
-# --- Step 2: Predict grammars with classifier ---
 
 uv run python src/classifier.py predict \
     --test_path "$TEST_GENERIC_PATH" \
@@ -29,16 +25,12 @@ uv run python src/classifier.py predict \
     --threshold 0.5 \
     --output_path "$CLASSIFIER_GENERIC_OUT"
 
-# --- Step 3: Specialize classifier predictions ---
-
 uv run python src/specialize_grammar.py \
     --test_path "$CLASSIFIER_GENERIC_OUT" \
     --train_path "data/smcalflow/train_balanced.json" \
     --train_generic_path "data/smcalflow/train_balanced_generic.json" \
     --cache_path "cache/specialize_balanced_cache.json" \
     --output_path "$CLASSIFIER_SPECIALIZED_OUT"
-
-# --- Step 4: Evaluate grammar quality ---
 
 uv run python src/eval_grammar.py \
     --predicted_path "$CLASSIFIER_GENERIC_OUT" \
@@ -49,8 +41,6 @@ uv run python src/eval_grammar.py \
     --predicted_path "$CLASSIFIER_SPECIALIZED_OUT" \
     --gold_path "$TEST_PATH" \
     --write
-
-# --- Step 5: Evaluate normal model (4 conditions) ---
 
 uv run python src/eval.py \
     --adapter "$BASELINE_ADAPTER" \
@@ -75,8 +65,6 @@ uv run python src/eval.py \
     --test_path "$TEST_PATH" \
     --output_path results/balanced_normal/gold.json
 
-# --- Step 6: Evaluate ablated model (4 conditions) ---
-
 uv run python src/eval.py \
     --adapter "$BASELINE_ADAPTER" \
     --noinclude_grammar \
@@ -99,8 +87,6 @@ uv run python src/eval.py \
     --adapter "$ABLATED_ADAPTER" \
     --test_path "$TEST_PATH" \
     --output_path results/balanced_ablated/gold.json
-
-# --- Step 7: Plot results ---
 
 uv run python src/plot.py plot_accuracies \
     --results_dir results \
