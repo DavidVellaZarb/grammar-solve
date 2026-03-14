@@ -12,6 +12,9 @@ from data import load_raw_data
 
 load_dotenv()
 
+MAX_RETRIES = 5
+RETRY_BASE_DELAY = 2
+
 SYSTEM_PROMPT = (
     "You are an expert grammar analyst. You are given a context-free grammar "
     "for a calendar-domain semantic parsing language, along with a natural "
@@ -53,22 +56,30 @@ async def _call_llm(
     messages: list[dict],
     cache: dict,
     semaphore: asyncio.Semaphore,
-    max_tokens: int = 1024,
+    max_completion_tokens: int = 1024,
 ) -> str:
     key = _cache_key(messages, model)
     if key in cache:
         return cache[key]
 
-    async with semaphore:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0,
-            max_tokens=max_tokens,
-        )
-    result = (response.choices[0].message.content or "").strip()
-    cache[key] = result
-    return result
+    for attempt in range(MAX_RETRIES):
+        try:
+            async with semaphore:
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0,
+                    max_completion_tokens=max_completion_tokens,
+                )
+            result = (response.choices[0].message.content or "").strip()
+            cache[key] = result
+            return result
+        except Exception as e:
+            if attempt == MAX_RETRIES - 1:
+                raise
+            delay = RETRY_BASE_DELAY * (2 ** attempt)
+            print(f"\nRetry {attempt + 1}/{MAX_RETRIES} after error: {e}")
+            await asyncio.sleep(delay)
 
 
 def _build_messages(
@@ -120,7 +131,7 @@ def generate_cot(
     input_path: str = "data/smcalflow/train_balanced.json",
     output_path: str = "data/smcalflow/train_balanced_cot.json",
     grammar_path: str = "grammars/smcalflow.lark",
-    model: str = "gpt-4.1",
+    model: str = "gpt-5.4",
     cache_path: str = "cache/cot_cache.json",
     max_concurrent: int = 20,
     save_every: int = 500,
