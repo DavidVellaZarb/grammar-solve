@@ -190,5 +190,85 @@ def plot_pass_at_k(
     print(f"Saved plot to {output_path}")
 
 
+def plot_multi_metrics(
+    result_files: list[str],
+    metrics: list[str],
+    labels: list[str] | None = None,
+    metric_labels: dict[str, str] | None = None,
+    output_path: str = "results/metrics.png",
+    title: str | None = None,
+):
+    """Plot multiple metrics from result JSON files as a grouped bar chart.
+
+    Args:
+        result_files: Paths to result JSON files (one per model).
+        metrics: Metric keys to plot from each result file.
+        labels: Display labels for each model. Uses filename stems if None.
+        metric_labels: Mapping from metric key to display label.
+        output_path: Where to save the figure.
+        title: Chart title.
+    """
+    labels = labels or [Path(f).parent.name for f in result_files]
+    metric_labels = metric_labels or {}
+
+    all_results = []
+    for path in result_files:
+        with open(path) as f:
+            all_results.append(json.load(f))
+
+    num_metrics = len(metrics)
+    num_models = len(result_files)
+    bar_width = 0.8 / num_models if num_models > 1 else 0.5
+
+    fig, ax = plt.subplots(figsize=(max(6, num_metrics * 2.5), 5))
+
+    for i, (data, label) in enumerate(zip(all_results, labels)):
+        values = [data.get(m, 0.0) for m in metrics]
+        if num_models > 1:
+            x_positions = [
+                j + i * bar_width - (num_models - 1) * bar_width / 2
+                for j in range(num_metrics)
+            ]
+        else:
+            x_positions = list(range(num_metrics))
+
+        bars = ax.bar(x_positions, values, bar_width, label=label)
+
+        for bar, val in zip(bars, values):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.01,
+                f"{val:.1%}",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+            )
+
+    x_labels = [metric_labels.get(m, m) for m in metrics]
+    ax.set_xticks(range(num_metrics))
+    ax.set_xticklabels(x_labels)
+    ax.set_ylabel("Score")
+    ax.set_ylim(0, 1.15)
+
+    if title:
+        ax.set_title(title)
+    else:
+        ax.set_title("Evaluation Metrics")
+
+    if num_models > 1:
+        ax.legend()
+
+    plt.tight_layout()
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Saved plot to {output_path}")
+
+
 if __name__ == "__main__":
-    fire.Fire({"plot_accuracies": plot_accuracies, "plot_pass_at_k": plot_pass_at_k})
+    fire.Fire({
+        "plot_accuracies": plot_accuracies,
+        "plot_pass_at_k": plot_pass_at_k,
+        "plot_multi_metrics": plot_multi_metrics,
+    })

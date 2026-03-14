@@ -13,9 +13,10 @@ uv run python src/eval_spice.py \
     --include_grammar \
     --output_path results/spice/grammar/test.json
 
-uv run python src/plot.py plot_accuracies \
-    --results_dir results/spice \
-    --models '["baseline", "grammar"]' \
-    --model_labels '{"baseline": "Baseline", "grammar": "Grammar-Guided (Ours)"}' \
+uv run python src/plot.py plot_multi_metrics \
+    --result_files '["results/spice/baseline/test.json", "results/spice/grammar/test.json"]' \
+    --metrics '["ged_similarity", "simulation_success", "syntax_validity"]' \
+    --labels '["Baseline", "Grammar-Guided (Ours)"]' \
+    --metric_labels '{"ged_similarity": "GED Similarity", "simulation_success": "Simulation Success", "syntax_validity": "Syntax Validity"}' \
     --output_path results/spice/comparison.png \
-    --title "SPICE Netlist Generation Accuracy"
+    --title "SPICE Netlist Generation"

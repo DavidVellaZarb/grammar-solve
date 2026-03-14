@@ -1,10 +1,12 @@
 import json
+import os
 import re
 import shutil
 import subprocess
 import tempfile
 
 import fire
+import networkx as nx
 import torch
 from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 from peft import PeftConfig, PeftModel
@@ -43,19 +45,22 @@ def check_syntax_validity(netlist: str) -> bool:
         return False
 
 
-def extract_component_types(netlist: str) -> set[str]:
-    """Extract set of component type prefixes from a netlist."""
-    types = set()
-    for line in netlist.strip().split("\n"):
-        line = line.strip()
-        if line and line[0].upper() in COMPONENT_PREFIXES:
-            types.add(line[0].upper())
-    return types
+# Number of net/node connections per component type (before value/model fields)
+_COMP_NODE_COUNT = {
+    "R": 2, "C": 2, "L": 2,
+    "V": 2, "I": 2,
+    "D": 2,
+    "Q": 3,  # collector, base, emitter (optional substrate handled by +1 heuristic)
+    "M": 4,  # drain, gate, source, bulk
+    "J": 3,  # drain, gate, source
+    "K": 0,  # coupled inductor: K1 L1 L2 value (L1/L2 are inductor names, not nets)
+    "X": -1, # subcircuit: variable number of nodes
+}
 
 
-def extract_connections(netlist: str) -> set[tuple[str, str, str]]:
-    """Extract (component_type, node1, node2) connection triples."""
-    connections = set()
+def _netlist_to_graph(netlist: str) -> nx.Graph:
+    """Parse a netlist into a graph: nodes=components+nets, edges=connections."""
+    G = nx.Graph()
     for line in netlist.strip().split("\n"):
         parts = line.strip().split()
         if not parts:
@@ -64,18 +69,86 @@ def extract_connections(netlist: str) -> set[tuple[str, str, str]]:
         if not name or name[0].upper() not in COMPONENT_PREFIXES:
             continue
         comp_type = name[0].upper()
-        if len(parts) >= 3:
-            connections.add((comp_type, parts[1].lower(), parts[2].lower()))
-    return connections
+        comp_node = f"comp:{name.lower()}"
+        G.add_node(comp_node, type=comp_type)
+
+        n_nodes = _COMP_NODE_COUNT.get(comp_type, 2)
+        if n_nodes == -1:
+            # Subcircuit call: all tokens until last non-param token are nodes,
+            # last one is subcircuit name. Take all except name and last non-'=' token.
+            node_parts = []
+            for part in parts[1:]:
+                if "=" in part:
+                    break
+                node_parts.append(part)
+            # Last one is subcircuit name, rest are nets
+            if len(node_parts) > 1:
+                node_parts = node_parts[:-1]
+        else:
+            node_parts = parts[1:1 + n_nodes]
+
+        for part in node_parts:
+            net_node = f"net:{part.lower()}"
+            if not G.has_node(net_node):
+                G.add_node(net_node, type="net")
+            G.add_edge(comp_node, net_node)
+    return G
 
 
-def jaccard_similarity(set_a: set, set_b: set) -> float:
-    """Compute Jaccard similarity between two sets."""
-    if not set_a and not set_b:
+def compute_ged_similarity(gold_netlist: str, pred_netlist: str, timeout: float = 5.0) -> float:
+    """Compute GED-based similarity: S = (1 - GED / GED_max) * 100.
+
+    Uses Masala-CHAI formulation where GED_max = |V1|+|E1|+|V2|+|E2|.
+    Uses networkx optimize_graph_edit_distance for tractability.
+    """
+    g1 = _netlist_to_graph(gold_netlist)
+    g2 = _netlist_to_graph(pred_netlist)
+
+    ged_max = g1.number_of_nodes() + g1.number_of_edges() + g2.number_of_nodes() + g2.number_of_edges()
+    if ged_max == 0:
         return 1.0
-    intersection = len(set_a & set_b)
-    union = len(set_a | set_b)
-    return intersection / union if union > 0 else 0.0
+
+    def node_subst_cost(attrs1, attrs2):
+        return 0.0 if attrs1.get("type") == attrs2.get("type") else 1.0
+
+    try:
+        # optimize_graph_edit_distance yields increasingly better upper bounds
+        best_ged = ged_max  # worst case
+        import signal
+
+        class TimeoutError(Exception):
+            pass
+
+        def handler(signum, frame):
+            raise TimeoutError()
+
+        old_handler = signal.signal(signal.SIGALRM, handler)
+        signal.setitimer(signal.ITIMER_REAL, timeout)
+        try:
+            for ged in nx.optimize_graph_edit_distance(
+                g1, g2, node_subst_cost=node_subst_cost
+            ):
+                best_ged = ged
+        except TimeoutError:
+            pass
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, old_handler)
+
+        similarity = max(0.0, 1.0 - best_ged / ged_max)
+        return similarity
+    except Exception:
+        return 0.0
+
+
+def extract_component_types(netlist: str) -> set[str]:
+    """Extract set of component type prefixes from a netlist."""
+    types = set()
+    for line in netlist.strip().split("\n"):
+        line = line.strip()
+        if line and line[0].upper() in COMPONENT_PREFIXES:
+            types.add(line[0].upper())
+    return types
 
 
 def compute_component_f1(gold_types: set[str], pred_types: set[str]) -> dict:
@@ -106,7 +179,6 @@ def run_ngspice_simulation(netlist: str, timeout: float = 10.0) -> bool:
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return False
     finally:
-        import os
         os.unlink(tmp_path)
 
 
@@ -121,8 +193,8 @@ def evaluate(
     grammar_file: str | None = None,
     include_grammar: bool = True,
     task: str = "program",
-    run_simulation: bool = False,
     ngspice_timeout: float = 10.0,
+    ged_timeout: float = 5.0,
 ):
     peft_config = PeftConfig.from_pretrained(adapter)
     base_model_name = model_name or peft_config.base_model_name_or_path
@@ -161,9 +233,8 @@ def evaluate(
 
     # Check ngspice availability
     has_ngspice = shutil.which("ngspice") is not None
-    if run_simulation and not has_ngspice:
-        print("Warning: ngspice not found on PATH, skipping simulation checks")
-        run_simulation = False
+    if not has_ngspice:
+        print("Warning: ngspice not found on PATH, simulation_success will be 0")
 
     prompts = []
     for ex in examples:
@@ -199,10 +270,17 @@ def evaluate(
             pred_netlist = extract_netlist(pred)
 
             exact_match = gold in pred
-
             valid = check_syntax_validity(pred_netlist)
 
-            # BLEU
+            # GED similarity (primary metric)
+            ged_sim = compute_ged_similarity(gold, pred_netlist, timeout=ged_timeout)
+
+            # Simulation
+            sim_success = False
+            if has_ngspice:
+                sim_success = run_ngspice_simulation(pred_netlist, timeout=ngspice_timeout)
+
+            # BLEU (secondary)
             gold_tokens = gold.split()
             pred_tokens = pred_netlist.split()
             bleu = sentence_bleu(
@@ -211,65 +289,54 @@ def evaluate(
                 smoothing_function=SmoothingFunction().method1,
             )
 
-            # Component type match
+            # Component type match (secondary)
             gold_comp = extract_component_types(gold)
             pred_comp = extract_component_types(pred_netlist)
             comp_metrics = compute_component_f1(gold_comp, pred_comp)
 
-            # Topology similarity
-            gold_conn = extract_connections(gold)
-            pred_conn = extract_connections(pred_netlist)
-            topo_sim = jaccard_similarity(gold_conn, pred_conn)
-
-            result = {
+            results.append({
                 "prompt": prompt,
                 "gold": gold,
                 "prediction": pred,
                 "pred_netlist": pred_netlist,
                 "exact_match": exact_match,
                 "valid": valid,
+                "ged_similarity": ged_sim,
+                "simulation_success": sim_success,
                 "bleu": bleu,
                 "component_precision": comp_metrics["precision"],
                 "component_recall": comp_metrics["recall"],
                 "component_f1": comp_metrics["f1"],
-                "topology_similarity": topo_sim,
-            }
-
-            if run_simulation:
-                sim_success = run_ngspice_simulation(pred_netlist, timeout=ngspice_timeout)
-                result["simulation_success"] = sim_success
-
-            results.append(result)
+            })
 
     total = len(results)
     exact_count = sum(1 for r in results if r["exact_match"])
     valid_count = sum(1 for r in results if r["valid"])
+    sim_count = sum(1 for r in results if r["simulation_success"])
+    ged_sims = [r["ged_similarity"] for r in results]
     bleus = [r["bleu"] for r in results]
     comp_f1s = [r["component_f1"] for r in results]
-    topo_sims = [r["topology_similarity"] for r in results]
 
     metrics = {
-        "accuracy": exact_count / total if total > 0 else 0.0,
-        "exact_match": exact_count / total if total > 0 else 0.0,
+        "accuracy": sum(ged_sims) / len(ged_sims) if ged_sims else 0.0,
+        "ged_similarity": sum(ged_sims) / len(ged_sims) if ged_sims else 0.0,
+        "simulation_success": sim_count / total if total > 0 else 0.0,
         "syntax_validity": valid_count / total if total > 0 else 0.0,
+        "exact_match": exact_count / total if total > 0 else 0.0,
         "bleu": sum(bleus) / len(bleus) if bleus else 0.0,
         "component_f1": sum(comp_f1s) / len(comp_f1s) if comp_f1s else 0.0,
-        "topology_similarity": sum(topo_sims) / len(topo_sims) if topo_sims else 0.0,
         "correct": exact_count,
         "total": total,
     }
 
-    if run_simulation:
-        sim_count = sum(1 for r in results if r.get("simulation_success", False))
-        metrics["simulation_success"] = sim_count / total if total > 0 else 0.0
-
-    print(f"Exact match:          {metrics['exact_match']:.4f} ({exact_count}/{total})")
+    print(f"\n--- Primary metrics ---")
+    print(f"GED similarity:       {metrics['ged_similarity']:.4f}")
+    print(f"Simulation success:   {metrics['simulation_success']:.4f} ({sim_count}/{total})")
     print(f"Syntax validity:      {metrics['syntax_validity']:.4f} ({valid_count}/{total})")
+    print(f"\n--- Secondary metrics ---")
+    print(f"Exact match:          {metrics['exact_match']:.4f} ({exact_count}/{total})")
     print(f"BLEU:                 {metrics['bleu']:.4f}")
     print(f"Component F1:         {metrics['component_f1']:.4f}")
-    print(f"Topology similarity:  {metrics['topology_similarity']:.4f}")
-    if run_simulation:
-        print(f"Simulation success:   {metrics['simulation_success']:.4f} ({sim_count}/{total})")
 
     if output_path:
         save_results(metrics, results, output_path)
