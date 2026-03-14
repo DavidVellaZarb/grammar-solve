@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import os
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -287,6 +288,10 @@ def check(
         print(f"Output file: {batch.output_file_id}")
     if batch.error_file_id:
         print(f"Error file: {batch.error_file_id}")
+    if batch.errors and batch.errors.data:
+        print("Errors:")
+        for err in batch.errors.data:
+            print(f"  [{err.code}] {err.message} (line={err.line}, param={err.param})")
     print(f"Metadata: {metadata_path}")
 
     return batch.status
@@ -409,17 +414,34 @@ def run(
         print(f"Wrote {len(results)} examples with CoT to {output_path}")
         return
 
-    submit(
-        input_path=input_path,
-        output_path=output_path,
-        grammar_path=grammar_path,
-        model=model,
-        cache_path=cache_path,
-    )
+    metadata_path = None
+    try:
+        metadata_path = _find_latest_metadata(input_path)
+        metadata = _load_batch_metadata(metadata_path)
+        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        batch = client.batches.retrieve(metadata["batch_id"])
+        if batch.status in ("validating", "in_progress", "finalizing"):
+            print(f"Resuming existing batch {batch.id} (status: {batch.status})")
+        elif batch.status == "completed":
+            print(f"Existing batch {batch.id} already completed, collecting results...")
+            collect(metadata_path=metadata_path)
+            return
+        else:
+            metadata_path = None
+    except (FileNotFoundError, KeyError):
+        metadata_path = None
 
-    metadata_path = _find_latest_metadata(input_path)
-    metadata = _load_batch_metadata(metadata_path)
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    if metadata_path is None:
+        submit(
+            input_path=input_path,
+            output_path=output_path,
+            grammar_path=grammar_path,
+            model=model,
+            cache_path=cache_path,
+        )
+        metadata_path = _find_latest_metadata(input_path)
+        metadata = _load_batch_metadata(metadata_path)
+        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
     print(f"\nPolling batch {metadata['batch_id']} every {poll_interval}s...")
     while True:
@@ -439,7 +461,11 @@ def run(
         time.sleep(poll_interval)
 
     if status != "completed":
-        print(f"Batch ended with status '{status}'. Running collect for partial results...")
+        print(f"Batch ended with status '{status}'.")
+        if batch.errors and batch.errors.data:
+            for err in batch.errors.data:
+                print(f"  [{err.code}] {err.message} (line={err.line}, param={err.param})")
+        sys.exit(1)
 
     collect(metadata_path=metadata_path)
 
