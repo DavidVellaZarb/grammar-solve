@@ -13,6 +13,8 @@ program: statement*
 
 assignment: name "=" expr ";"
           | SPECIAL_VAR "=" expr ";"
+          | name "=" "let" "(" let_assignments ")" expr ";"
+          | SPECIAL_VAR "=" "let" "(" let_assignments ")" expr ";"
 
 module_def: "module" name "(" param_list? ")" "{" statement* "}"
           | "module" name "(" param_list? ")" module_call
@@ -20,7 +22,7 @@ module_def: "module" name "(" param_list? ")" "{" statement* "}"
 
 function_def: "function" name "(" param_list? ")" "=" expr ";"
 
-param_list: param ("," param)*
+param_list: param ("," param)* ","?
 
 param: name ("=" expr)?
      | SPECIAL_VAR ("=" expr)?
@@ -112,6 +114,7 @@ include_statement: "include" USE_PATH ";"?
              | SPECIAL_VAR
              | list_expr
              | range_expr
+             | list_comp
              | "(" expr ")"
 
 list_expr: "[" "]"
@@ -121,6 +124,26 @@ list_items: expr ("," expr)* ","?
 
 range_expr: "[" expr ":" expr "]"
           | "[" expr ":" expr ":" expr "]"
+
+list_comp: "[" comp_for "]"
+         | "[" comp_if "]"
+         | "[" comp_let "]"
+         | "[" comp_each "]"
+
+comp_for: "for" "(" for_assignments ")" comp_element
+
+comp_if: "if" "(" expr ")" comp_element "else" comp_element
+       | "if" "(" expr ")" comp_element
+
+comp_let: "let" "(" let_assignments ")" comp_element
+
+comp_each: "each" comp_element
+
+?comp_element: comp_for
+             | comp_if
+             | comp_let
+             | comp_each
+             | expr
 
 ?name: IDENTIFIER
      | DIGIT_IDENTIFIER
