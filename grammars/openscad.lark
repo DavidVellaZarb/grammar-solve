@@ -1,4 +1,4 @@
-program: (statement)*
+program: statement*
 
 ?statement: assignment
           | module_def
@@ -9,54 +9,57 @@ program: (statement)*
           | let_statement
           | use_statement
           | include_statement
-          | bare_block
           | ";"
 
-bare_block: "{" (statement)* "}"
-
-assignment: IDENTIFIER "=" expr ";"
+assignment: name "=" expr ";"
           | SPECIAL_VAR "=" expr ";"
 
-module_def: "module" IDENTIFIER "(" param_list? ")" "{" (statement)* "}"
-          | "module" IDENTIFIER "(" param_list? ")" module_call
-          | "module" IDENTIFIER "(" param_list? ")" ";"
+module_def: "module" name "(" param_list? ")" "{" statement* "}"
+          | "module" name "(" param_list? ")" module_call
+          | "module" name "(" param_list? ")" ";"
 
-function_def: "function" IDENTIFIER "(" param_list? ")" "=" expr ";"
+function_def: "function" name "(" param_list? ")" "=" expr ";"
 
 param_list: param ("," param)*
 
-param: IDENTIFIER ("=" expr)?
+param: name ("=" expr)?
      | SPECIAL_VAR ("=" expr)?
 
-module_call: modifier? module_name "(" arg_list? ")" (block | ";"+)
+module_call: modifier? module_name "(" arg_list? ")" "{" statement* "}" ";"?
+           | modifier? module_name "(" arg_list? ")" statement
 
 modifier: "!" | "#" | "%" | "*"
 
-block: "{" (statement)* "}" ";"?
-     | statement
-
-module_name: IDENTIFIER
+module_name: name
 
 arg_list: arg ("," arg?)*
 
-arg: IDENTIFIER "=" expr
+arg: name "=" expr
    | SPECIAL_VAR "=" expr
    | expr
 
-if_statement: "if" "(" expr ")" block ("else" block)?
+if_statement: "if" "(" expr ")" "{" statement* "}" "else" "{" statement* "}"
+            | "if" "(" expr ")" "{" statement* "}" "else" statement
+            | "if" "(" expr ")" "{" statement* "}"
+            | "if" "(" expr ")" statement "else" "{" statement* "}"
+            | "if" "(" expr ")" statement "else" statement
+            | "if" "(" expr ")" statement
 
-for_statement: "for" "(" for_assignments ")" block
-             | "intersection_for" "(" for_assignments ")" block
+for_statement: "for" "(" for_assignments ")" "{" statement* "}"
+             | "for" "(" for_assignments ")" statement
+             | "intersection_for" "(" for_assignments ")" "{" statement* "}"
+             | "intersection_for" "(" for_assignments ")" statement
 
 for_assignments: for_assignment ("," for_assignment)*
 
-for_assignment: IDENTIFIER "=" expr
+for_assignment: name "=" expr
 
-let_statement: "let" "(" let_assignments ")" block
+let_statement: "let" "(" let_assignments ")" "{" statement* "}"
+             | "let" "(" let_assignments ")" statement
 
 let_assignments: let_assignment ("," let_assignment)*
 
-let_assignment: IDENTIFIER "=" expr
+let_assignment: name "=" expr
 
 use_statement: "use" USE_PATH ";"?
 
@@ -96,7 +99,7 @@ include_statement: "include" USE_PATH ";"?
            | postfix_expr
 
 ?postfix_expr: postfix_expr "[" expr "]"
-             | postfix_expr "." IDENTIFIER
+             | postfix_expr "." name
              | primary_expr
 
 ?primary_expr: NUMBER
@@ -104,19 +107,23 @@ include_statement: "include" USE_PATH ";"?
              | "true" -> true_literal
              | "false" -> false_literal
              | "undef" -> undef_literal
-             | IDENTIFIER "(" arg_list? ")" -> function_call
-             | IDENTIFIER
+             | name "(" arg_list? ")" -> function_call
+             | name
              | SPECIAL_VAR
              | list_expr
              | range_expr
              | "(" expr ")"
 
-list_expr: "[" list_items? "]"
+list_expr: "[" "]"
+         | "[" list_items "]"
 
-list_items: expr ("," expr?)* ","?
+list_items: expr ("," expr)* ","?
 
 range_expr: "[" expr ":" expr "]"
           | "[" expr ":" expr ":" expr "]"
+
+?name: IDENTIFIER
+     | DIGIT_IDENTIFIER
 
 SPECIAL_VAR: /\$[a-zA-Z_][a-zA-Z0-9_]*/
 
@@ -125,7 +132,9 @@ USE_PATH: "<" /[^>]+/ ">"
 COMMENT: /\/\/[^\n]*/
        | /\/\*[\s\S]*?\*\//
 
-IDENTIFIER: /[a-zA-Z_0-9][a-zA-Z0-9_]*/
+IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9_]*/
+
+DIGIT_IDENTIFIER.3: /[0-9]+[a-zA-Z_][a-zA-Z0-9_]*/
 
 NUMBER: /[0-9]+\.?[0-9]*([eE][+-]?[0-9]+)?/
       | /\.[0-9]+([eE][+-]?[0-9]+)?/

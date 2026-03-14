@@ -8,7 +8,9 @@ from datasets import load_dataset
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-from grammar_parser import _build_parser, _detect_repetition_rules, _walk_tree
+from lark import Lark
+
+from grammar_parser import _detect_repetition_rules, _walk_tree
 from grammar_utils import OPENSCAD_GENERIC_TERMINALS
 
 SKIP_RULES = {"program"}
@@ -65,7 +67,9 @@ def load(
     print(f"Loaded {len(data)} examples")
 
     print("Building OpenSCAD parser...")
-    parser = _build_parser(GRAMMAR_PATH, start="program")
+    with open(GRAMMAR_PATH) as f:
+        grammar_text = f.read()
+    parser = Lark(grammar_text, parser="lalr", start="program", keep_all_tokens=True)
 
     generic_terminals = OPENSCAD_GENERIC_TERMINALS if generic else None
     print(f"Extracting minimal grammars{' (generic)' if generic else ''}...")
