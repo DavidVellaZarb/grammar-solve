@@ -19,6 +19,7 @@ load_dotenv()
 MAX_RETRIES = 5
 RETRY_BASE_DELAY = 2
 BATCH_METADATA_DIR = "cache/cot_batches"
+MAX_BATCH_SIZE_BYTES = 190 * 1024 * 1024
 
 SYSTEM_PROMPT = (
     "You are an expert grammar analyst. You are given a context-free grammar "
@@ -132,20 +133,27 @@ async def _process_examples(
     return list(results)
 
 
-def _build_batch_jsonl(
+def _build_batch_jsonl_chunks(
     examples: list[dict],
     indices: list[int],
     model: str,
     system_prompt: str,
-) -> tuple[str, dict, dict]:
-    lines = []
-    id_to_index = {}
-    id_to_cache_key = {}
+) -> list[tuple[str, dict, dict]]:
+    chunks = []
+    current_lines = []
+    current_size = 0
+    current_id_to_index = {}
+    current_id_to_cache_key = {}
+
+    def _flush():
+        if current_lines:
+            chunks.append(("\n".join(current_lines), dict(current_id_to_index), dict(current_id_to_cache_key)))
+
     for idx in indices:
         ex = examples[idx]
         custom_id = f"req-{idx}"
         messages = _build_messages(ex, system_prompt)
-        line = {
+        line = json.dumps({
             "custom_id": custom_id,
             "method": "POST",
             "url": "/v1/chat/completions",
@@ -155,11 +163,21 @@ def _build_batch_jsonl(
                 "temperature": 0,
                 "max_completion_tokens": 1024,
             },
-        }
-        lines.append(json.dumps(line))
-        id_to_index[custom_id] = idx
-        id_to_cache_key[custom_id] = _cache_key(messages, model)
-    return "\n".join(lines), id_to_index, id_to_cache_key
+        })
+        line_size = len(line.encode("utf-8")) + 1
+        if current_lines and current_size + line_size > MAX_BATCH_SIZE_BYTES:
+            _flush()
+            current_lines = []
+            current_size = 0
+            current_id_to_index = {}
+            current_id_to_cache_key = {}
+        current_lines.append(line)
+        current_size += line_size
+        current_id_to_index[custom_id] = idx
+        current_id_to_cache_key[custom_id] = _cache_key(messages, model)
+
+    _flush()
+    return chunks
 
 
 def _save_batch_metadata(metadata: dict) -> str:
@@ -228,42 +246,53 @@ def submit(
         print("All examples are cached. Nothing to submit.")
         return
 
-    jsonl_content, id_to_index, id_to_cache_key = _build_batch_jsonl(
-        examples, uncached_indices, model, system_prompt
-    )
+    chunks = _build_batch_jsonl_chunks(examples, uncached_indices, model, system_prompt)
+    print(f"Split into {len(chunks)} batch(es)")
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    jsonl_bytes = jsonl_content.encode("utf-8")
-    input_file = client.files.create(
-        file=("batch_input.jsonl", jsonl_bytes),
-        purpose="batch",
-    )
-    print(f"Uploaded input file: {input_file.id}")
+    batches = []
+    all_id_to_index = {}
+    all_id_to_cache_key = {}
 
-    batch = client.batches.create(
-        input_file_id=input_file.id,
-        endpoint="/v1/chat/completions",
-        completion_window="24h",
-    )
-    print(f"Created batch: {batch.id}")
+    for i, (jsonl_content, id_to_index, id_to_cache_key) in enumerate(chunks):
+        jsonl_bytes = jsonl_content.encode("utf-8")
+        input_file = client.files.create(
+            file=("batch_input.jsonl", jsonl_bytes),
+            purpose="batch",
+        )
+        batch = client.batches.create(
+            input_file_id=input_file.id,
+            endpoint="/v1/chat/completions",
+            completion_window="24h",
+        )
+        batches.append({"batch_id": batch.id, "input_file_id": input_file.id})
+        all_id_to_index.update(id_to_index)
+        all_id_to_cache_key.update(id_to_cache_key)
+        size_mb = len(jsonl_bytes) / (1024 * 1024)
+        print(f"  Batch {i+1}/{len(chunks)}: {batch.id} ({len(id_to_index)} requests, {size_mb:.0f}MB)")
 
     metadata = {
-        "batch_id": batch.id,
-        "input_file_id": input_file.id,
+        "batches": batches,
         "input_path": input_path,
         "output_path": output_path,
         "grammar_path": grammar_path,
         "model": model,
         "cache_path": cache_path,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "custom_id_to_index": id_to_index,
-        "custom_id_to_cache_key": id_to_cache_key,
+        "custom_id_to_index": all_id_to_index,
+        "custom_id_to_cache_key": all_id_to_cache_key,
         "n_total": len(examples),
         "n_cached": n_cached,
         "n_submitted": len(uncached_indices),
     }
     meta_path = _save_batch_metadata(metadata)
     print(f"Metadata saved to: {meta_path}")
+
+
+def _get_batches_info(metadata: dict) -> list[dict]:
+    if "batches" in metadata:
+        return metadata["batches"]
+    return [{"batch_id": metadata["batch_id"], "input_file_id": metadata["input_file_id"]}]
 
 
 def check(
@@ -275,26 +304,31 @@ def check(
     metadata = _load_batch_metadata(metadata_path)
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    batch = client.batches.retrieve(metadata["batch_id"])
+    batches_info = _get_batches_info(metadata)
 
-    print(f"Batch: {batch.id}")
-    print(f"Status: {batch.status}")
     print(f"Input: {metadata['input_path']}")
     print(f"Submitted: {metadata['n_submitted']} / Total: {metadata['n_total']}")
-    if batch.request_counts:
-        rc = batch.request_counts
-        print(f"Completed: {rc.completed}, Failed: {rc.failed}, Total: {rc.total}")
-    if batch.output_file_id:
-        print(f"Output file: {batch.output_file_id}")
-    if batch.error_file_id:
-        print(f"Error file: {batch.error_file_id}")
-    if batch.errors and batch.errors.data:
-        print("Errors:")
-        for err in batch.errors.data:
-            print(f"  [{err.code}] {err.message} (line={err.line}, param={err.param})")
+    print(f"Batches: {len(batches_info)}")
+
+    statuses = []
+    for i, bi in enumerate(batches_info):
+        batch = client.batches.retrieve(bi["batch_id"])
+        statuses.append(batch.status)
+        prefix = f"  [{i+1}/{len(batches_info)}] {batch.id}"
+        print(f"{prefix}: {batch.status}")
+        if batch.request_counts:
+            rc = batch.request_counts
+            print(f"    Completed: {rc.completed}, Failed: {rc.failed}, Total: {rc.total}")
+        if batch.errors and batch.errors.data:
+            for err in batch.errors.data:
+                print(f"    [{err.code}] {err.message} (line={err.line}, param={err.param})")
     print(f"Metadata: {metadata_path}")
 
-    return batch.status
+    if all(s == "completed" for s in statuses):
+        return "completed"
+    if any(s in ("failed", "expired", "cancelled") for s in statuses):
+        return "failed"
+    return "in_progress"
 
 
 def collect(
@@ -306,54 +340,56 @@ def collect(
     metadata = _load_batch_metadata(metadata_path)
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    batch = client.batches.retrieve(metadata["batch_id"])
+    batches_info = _get_batches_info(metadata)
 
-    if batch.status not in ("completed", "failed", "expired"):
-        print(f"Batch status is '{batch.status}', not ready for collection.")
-        print("Run 'check' to see progress, or wait for completion.")
-        return
+    for bi in batches_info:
+        batch = client.batches.retrieve(bi["batch_id"])
+        if batch.status not in ("completed", "failed", "expired"):
+            print(f"Batch {batch.id} status is '{batch.status}', not ready for collection.")
+            print("Run 'check' to see progress, or wait for completion.")
+            return
 
     with open(metadata["grammar_path"]) as f:
         full_grammar = f.read()
     system_prompt = SYSTEM_PROMPT.format(full_grammar=full_grammar)
     examples = load_raw_data(metadata["input_path"])
     cache = _load_cache(metadata["cache_path"])
-    id_to_index = metadata["custom_id_to_index"]
     id_to_cache_key = metadata["custom_id_to_cache_key"]
 
     n_collected = 0
     n_failed = 0
-    if batch.output_file_id:
-        content = client.files.content(batch.output_file_id)
-        for line in content.text.strip().split("\n"):
-            if not line:
-                continue
-            result = json.loads(line)
-            custom_id = result["custom_id"]
-            cache_key = id_to_cache_key.get(custom_id)
-            if cache_key is None:
-                continue
-            response_body = result.get("response", {}).get("body", {})
-            choices = response_body.get("choices", [])
-            if choices:
-                text = (choices[0].get("message", {}).get("content") or "").strip()
-                cache[cache_key] = text
-                n_collected += 1
-            else:
-                error = result.get("error") or result.get("response", {}).get("error")
-                print(f"No choices for {custom_id}: {error}")
+    for bi in batches_info:
+        batch = client.batches.retrieve(bi["batch_id"])
+        if batch.output_file_id:
+            content = client.files.content(batch.output_file_id)
+            for line in content.text.strip().split("\n"):
+                if not line:
+                    continue
+                result = json.loads(line)
+                custom_id = result["custom_id"]
+                cache_key = id_to_cache_key.get(custom_id)
+                if cache_key is None:
+                    continue
+                response_body = result.get("response", {}).get("body", {})
+                choices = response_body.get("choices", [])
+                if choices:
+                    text = (choices[0].get("message", {}).get("content") or "").strip()
+                    cache[cache_key] = text
+                    n_collected += 1
+                else:
+                    error = result.get("error") or result.get("response", {}).get("error")
+                    print(f"No choices for {custom_id}: {error}")
+                    n_failed += 1
+        if batch.error_file_id:
+            error_content = client.files.content(batch.error_file_id)
+            for line in error_content.text.strip().split("\n"):
+                if not line:
+                    continue
+                error_result = json.loads(line)
+                custom_id = error_result.get("custom_id", "unknown")
+                error = error_result.get("error", {})
+                print(f"Error for {custom_id}: {error}")
                 n_failed += 1
-
-    if batch.error_file_id:
-        error_content = client.files.content(batch.error_file_id)
-        for line in error_content.text.strip().split("\n"):
-            if not line:
-                continue
-            error_result = json.loads(line)
-            custom_id = error_result.get("custom_id", "unknown")
-            error = error_result.get("error", {})
-            print(f"Error for {custom_id}: {error}")
-            n_failed += 1
 
     print(f"Collected: {n_collected}, Failed: {n_failed}")
     _save_cache(cache, metadata["cache_path"])
@@ -419,13 +455,20 @@ def run(
         metadata_path = _find_latest_metadata(input_path)
         metadata = _load_batch_metadata(metadata_path)
         client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-        batch = client.batches.retrieve(metadata["batch_id"])
-        if batch.status in ("validating", "in_progress", "finalizing"):
-            print(f"Resuming existing batch {batch.id} (status: {batch.status})")
-        elif batch.status == "completed":
-            print(f"Existing batch {batch.id} already completed, collecting results...")
-            collect(metadata_path=metadata_path)
-            return
+        batches_info = _get_batches_info(metadata)
+        all_active = True
+        for bi in batches_info:
+            batch = client.batches.retrieve(bi["batch_id"])
+            if batch.status in ("failed", "expired", "cancelled"):
+                all_active = False
+                break
+        if all_active:
+            statuses = [client.batches.retrieve(bi["batch_id"]).status for bi in batches_info]
+            if all(s == "completed" for s in statuses):
+                print(f"All {len(batches_info)} batch(es) already completed, collecting results...")
+                collect(metadata_path=metadata_path)
+                return
+            print(f"Resuming {len(batches_info)} existing batch(es)")
         else:
             metadata_path = None
     except (FileNotFoundError, KeyError):
@@ -443,28 +486,37 @@ def run(
         metadata = _load_batch_metadata(metadata_path)
         client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-    print(f"\nPolling batch {metadata['batch_id']} every {poll_interval}s...")
+    batches_info = _get_batches_info(metadata)
+    print(f"\nPolling {len(batches_info)} batch(es) every {poll_interval}s...")
     while True:
-        batch = client.batches.retrieve(metadata["batch_id"])
-        status = batch.status
-        progress = ""
-        if batch.request_counts:
-            rc = batch.request_counts
-            progress = f" ({rc.completed}/{rc.total} completed"
-            if rc.failed:
-                progress += f", {rc.failed} failed"
-            progress += ")"
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Status: {status}{progress}")
+        all_done = True
+        any_failed = False
+        parts = []
+        for i, bi in enumerate(batches_info):
+            batch = client.batches.retrieve(bi["batch_id"])
+            s = batch.status
+            if s not in ("completed", "failed", "expired", "cancelled"):
+                all_done = False
+            if s in ("failed", "expired", "cancelled"):
+                any_failed = True
+            progress = ""
+            if batch.request_counts:
+                rc = batch.request_counts
+                progress = f" {rc.completed}/{rc.total}"
+            parts.append(f"B{i+1}:{s}{progress}")
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {' | '.join(parts)}")
 
-        if status in ("completed", "failed", "expired", "cancelled"):
+        if all_done:
             break
         time.sleep(poll_interval)
 
-    if status != "completed":
-        print(f"Batch ended with status '{status}'.")
-        if batch.errors and batch.errors.data:
-            for err in batch.errors.data:
-                print(f"  [{err.code}] {err.message} (line={err.line}, param={err.param})")
+    if any_failed:
+        print("One or more batches failed.")
+        for bi in batches_info:
+            batch = client.batches.retrieve(bi["batch_id"])
+            if batch.errors and batch.errors.data:
+                for err in batch.errors.data:
+                    print(f"  [{err.code}] {err.message} (line={err.line}, param={err.param})")
         sys.exit(1)
 
     collect(metadata_path=metadata_path)
