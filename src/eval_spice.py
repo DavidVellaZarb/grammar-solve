@@ -4,6 +4,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import fire
 import networkx as nx
@@ -181,6 +182,46 @@ def run_ngspice_simulation(netlist: str, timeout: float = 10.0) -> bool:
         os.unlink(tmp_path)
 
 
+def _evaluate_single(args: tuple) -> dict:
+    """Evaluate a single prediction (top-level for ProcessPoolExecutor)."""
+    idx, gold, prompt, pred, ged_timeout, ngspice_timeout = args
+    pred_netlist = extract_netlist(pred)
+
+    exact_match = gold in pred
+    valid = check_syntax_validity(pred_netlist)
+
+    ged_sim = compute_ged_similarity(gold, pred_netlist, timeout=ged_timeout)
+    sim_success = run_ngspice_simulation(pred_netlist, timeout=ngspice_timeout)
+
+    gold_tokens = gold.split()
+    pred_tokens = pred_netlist.split()
+    bleu = sentence_bleu(
+        [gold_tokens],
+        pred_tokens,
+        smoothing_function=SmoothingFunction().method1,
+    )
+
+    gold_comp = extract_component_types(gold)
+    pred_comp = extract_component_types(pred_netlist)
+    comp_metrics = compute_component_f1(gold_comp, pred_comp)
+
+    return {
+        "idx": idx,
+        "prompt": prompt,
+        "gold": gold,
+        "prediction": pred,
+        "pred_netlist": pred_netlist,
+        "exact_match": exact_match,
+        "valid": valid,
+        "ged_similarity": ged_sim,
+        "simulation_success": sim_success,
+        "bleu": bleu,
+        "component_precision": comp_metrics["precision"],
+        "component_recall": comp_metrics["recall"],
+        "component_f1": comp_metrics["f1"],
+    }
+
+
 def evaluate(
     adapter: str,
     test_path: str = "data/spice/test.json",
@@ -230,9 +271,9 @@ def evaluate(
     else:
         print("Using gold grammars from test data")
 
-    has_ngspice = shutil.which("ngspice") is not None
-    if not has_ngspice:
-        print("Warning: ngspice not found on PATH, simulation_success will be 0")
+    # Install ngspice: apt-get install -y ngspice
+    if shutil.which("ngspice") is None:
+        raise RuntimeError("ngspice not found on PATH (install with: apt-get install -y ngspice)")
 
     prompts = []
     for ex in examples:
@@ -242,11 +283,10 @@ def evaluate(
         )
         prompts.append(text)
 
-    results = []
-
-    for i in tqdm(range(0, len(prompts), batch_size), desc="Evaluating"):
+    # Phase 1: Generate all predictions (GPU-bound)
+    predictions = []
+    for i in tqdm(range(0, len(prompts), batch_size), desc="Generating"):
         batch_prompts = prompts[i : i + batch_size]
-        batch_examples = examples[i : i + batch_size]
 
         inputs = tokenizer(
             batch_prompts, return_tensors="pt", padding=True, truncation=True
@@ -261,47 +301,26 @@ def evaluate(
 
         prompt_len = inputs["input_ids"].shape[1]
         generated_ids = output_ids[:, prompt_len:]
-        predictions = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+        predictions.extend(tokenizer.batch_decode(generated_ids, skip_special_tokens=True))
 
-        for ex, prompt, pred in zip(batch_examples, batch_prompts, predictions):
-            gold = ex["program"]
-            pred_netlist = extract_netlist(pred)
+    # Free GPU memory before CPU-bound evaluation
+    del model
+    torch.cuda.empty_cache()
 
-            exact_match = gold in pred
-            valid = check_syntax_validity(pred_netlist)
+    # Phase 2: Evaluate all predictions (CPU-bound, parallelized)
+    eval_args = [
+        (i, ex["program"], prompt, pred, ged_timeout, ngspice_timeout)
+        for i, (ex, prompt, pred) in enumerate(zip(examples, prompts, predictions))
+    ]
 
-            ged_sim = compute_ged_similarity(gold, pred_netlist, timeout=ged_timeout)
+    results_unordered = []
+    num_workers = min(16, os.cpu_count() or 1, len(eval_args))
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        futures = {executor.submit(_evaluate_single, args): args[0] for args in eval_args}
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Evaluating"):
+            results_unordered.append(future.result())
 
-            sim_success = False
-            if has_ngspice:
-                sim_success = run_ngspice_simulation(pred_netlist, timeout=ngspice_timeout)
-
-            gold_tokens = gold.split()
-            pred_tokens = pred_netlist.split()
-            bleu = sentence_bleu(
-                [gold_tokens],
-                pred_tokens,
-                smoothing_function=SmoothingFunction().method1,
-            )
-
-            gold_comp = extract_component_types(gold)
-            pred_comp = extract_component_types(pred_netlist)
-            comp_metrics = compute_component_f1(gold_comp, pred_comp)
-
-            results.append({
-                "prompt": prompt,
-                "gold": gold,
-                "prediction": pred,
-                "pred_netlist": pred_netlist,
-                "exact_match": exact_match,
-                "valid": valid,
-                "ged_similarity": ged_sim,
-                "simulation_success": sim_success,
-                "bleu": bleu,
-                "component_precision": comp_metrics["precision"],
-                "component_recall": comp_metrics["recall"],
-                "component_f1": comp_metrics["f1"],
-            })
+    results = sorted(results_unordered, key=lambda r: r.pop("idx"))
 
     total = len(results)
     exact_count = sum(1 for r in results if r["exact_match"])
