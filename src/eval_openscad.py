@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import tempfile
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
 import fire
 import numpy as np
 import torch
@@ -54,24 +56,15 @@ def compile_openscad(code: str, timeout: float = 30.0) -> trimesh.Trimesh | None
                 os.unlink(p)
 
 
-def check_syntax_validity(code: str, timeout: float = 30.0) -> bool:
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".scad", delete=False) as f_in:
-        f_in.write(code)
-        scad_path = f_in.name
-
-    stl_path = scad_path.replace(".scad", ".stl")
-    try:
-        result = subprocess.run(
-            ["openscad", "--export-format", "stl", "-o", stl_path, scad_path],
-            capture_output=True, text=True, timeout=timeout,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
-    finally:
-        for p in [scad_path, stl_path]:
-            if os.path.exists(p):
-                os.unlink(p)
+def _evaluate_single(gold_code, pred_code, compile_timeout, n_sample_points, voxel_pitch):
+    gold_mesh = compile_openscad(gold_code, timeout=compile_timeout)
+    pred_mesh = compile_openscad(pred_code, timeout=compile_timeout)
+    valid = pred_mesh is not None
+    cd, iou = None, None
+    if gold_mesh is not None and pred_mesh is not None:
+        cd = compute_chamfer_distance(gold_mesh, pred_mesh, n_points=n_sample_points)
+        iou = compute_iou(gold_mesh, pred_mesh, pitch=voxel_pitch)
+    return {"valid": valid, "chamfer_distance": cd, "iou": iou}
 
 
 def compute_chamfer_distance(mesh1: trimesh.Trimesh, mesh2: trimesh.Trimesh,
@@ -108,8 +101,8 @@ def compute_iou(mesh1: trimesh.Trimesh, mesh2: trimesh.Trimesh,
         v1 = m1.voxelized(pitch)
         v2 = m2.voxelized(pitch)
 
-        s1 = set(map(tuple, v1.sparse_indices))
-        s2 = set(map(tuple, v2.sparse_indices))
+        s1 = set(map(tuple, getattr(v1, "sparse_indices")))
+        s2 = set(map(tuple, getattr(v2, "sparse_indices")))
 
         intersection = len(s1 & s2)
         union = len(s1 | s2)
@@ -134,6 +127,7 @@ def evaluate(
     n_sample_points: int = 10000,
     voxel_pitch: float = 0.02,
     cache_dir: str | None = None,
+    max_workers: int = 8,
 ):
     assert shutil.which("openscad") is not None, (
         "openscad CLI not found on PATH. Install OpenSCAD and ensure 'openscad' is available."
@@ -185,9 +179,9 @@ def evaluate(
         )
         prompts.append(text)
 
-    results = []
+    inference_results = []
 
-    for i in tqdm(range(0, len(prompts), batch_size), desc="Evaluating"):
+    for i in tqdm(range(0, len(prompts), batch_size), desc="Generating"):
         batch_prompts = prompts[i : i + batch_size]
         batch_examples = examples[i : i + batch_size]
 
@@ -207,30 +201,44 @@ def evaluate(
         predictions = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
         for ex, prompt, pred in zip(batch_examples, batch_prompts, predictions):
-            gold = ex["program"]
-            pred_code = extract_openscad_code(pred)
-
-            valid = check_syntax_validity(pred_code, timeout=compile_timeout)
-
-            cd = None
-            iou = None
-
-            gold_mesh = compile_openscad(gold, timeout=compile_timeout)
-            pred_mesh = compile_openscad(pred_code, timeout=compile_timeout) if valid else None
-
-            if gold_mesh is not None and pred_mesh is not None:
-                cd = compute_chamfer_distance(gold_mesh, pred_mesh, n_points=n_sample_points)
-                iou = compute_iou(gold_mesh, pred_mesh, pitch=voxel_pitch)
-
-            results.append({
+            inference_results.append({
                 "prompt": prompt,
-                "gold": gold,
                 "prediction": pred,
-                "pred_code": pred_code,
-                "valid": valid,
-                "chamfer_distance": cd,
-                "iou": iou,
+                "pred_code": extract_openscad_code(pred),
+                "gold": ex["program"],
             })
+
+    del model
+    torch.cuda.empty_cache()
+
+    eval_results = {}
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        future_to_idx = {}
+        for idx, ir in enumerate(inference_results):
+            future = executor.submit(
+                _evaluate_single,
+                ir["gold"], ir["pred_code"],
+                compile_timeout, n_sample_points, voxel_pitch,
+            )
+            future_to_idx[future] = idx
+
+        for future in tqdm(as_completed(future_to_idx), total=len(inference_results), desc="Evaluating"):
+            idx = future_to_idx[future]
+            eval_results[idx] = future.result()
+
+    results = []
+    for idx, ir in enumerate(inference_results):
+        er = eval_results[idx]
+        results.append({
+            "prompt": ir["prompt"],
+            "gold": ir["gold"],
+            "prediction": ir["prediction"],
+            "pred_code": ir["pred_code"],
+            "valid": er["valid"],
+            "chamfer_distance": er["chamfer_distance"],
+            "iou": er["iou"],
+        })
 
     total = len(results)
     valid_count = sum(1 for r in results if r["valid"])
