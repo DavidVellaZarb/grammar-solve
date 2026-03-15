@@ -17,8 +17,8 @@ uv run python src/eval_spice.py \
 
 uv run python src/plot.py plot_multi_metrics \
     --result_files '["results/spice/baseline/test.json", "results/spice/grammar/test.json"]' \
-    --metrics '["ged_similarity", "simulation_success", "syntax_validity"]' \
+    --metrics '["ged_similarity", "syntax_validity", "exact_match", "bleu", "component_f1"]' \
     --labels '["Baseline", "Grammar-Guided (Ours)"]' \
-    --metric_labels '{"ged_similarity": "GED Similarity", "simulation_success": "Simulation Success", "syntax_validity": "Syntax Validity"}' \
+    --metric_labels '{"ged_similarity": "GED Similarity", "syntax_validity": "Syntax Validity", "exact_match": "Exact Match", "bleu": "BLEU", "component_f1": "Component F1"}' \
     --output_path results/spice/comparison.png \
     --title "SPICE Netlist Generation"
