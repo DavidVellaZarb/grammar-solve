@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import fire
 import matplotlib.pyplot as plt
@@ -266,11 +267,12 @@ def plot_multi_metrics(
     print(f"Saved plot to {output_path}")
 
 
-def _resolve_metric(data: dict, key: str):
+def _resolve_metric(data: dict, key: str) -> float:
     """Resolve dot-notation keys from nested dicts (e.g., 'metrics.exact_match')."""
+    result: Any = data
     for part in key.split("."):
-        data = data[part]
-    return data
+        result = result[part]
+    return result
 
 
 def plot_bar_chart(

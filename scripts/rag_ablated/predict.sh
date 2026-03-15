@@ -13,3 +13,13 @@ for k in 8 16 32 64 128; do
         --gold_path data/smcalflow/test.json \
         --write
 done
+
+uv run python src/plot.py plot_lines \
+    --result_files '["outputs/predicted_grammars/rag_ablated/test_k8.json", "outputs/predicted_grammars/rag_ablated/test_k16.json", "outputs/predicted_grammars/rag_ablated/test_k32.json", "outputs/predicted_grammars/rag_ablated/test_k64.json", "outputs/predicted_grammars/rag_ablated/test_k128.json"]' \
+    --x_values '[8, 16, 32, 64, 128]' \
+    --metrics '["metrics.exact_match", "metrics.relaxed_match"]' \
+    --metric_labels '{"metrics.exact_match": "Exact Match", "metrics.relaxed_match": "Relaxed Match"}' \
+    --output_path results/rag_ablated/rag_ablated_grammar_quality.png \
+    --title "RAG Ablated — Grammar Quality by k" \
+    --xlabel k \
+    --ylabel Score
