@@ -19,7 +19,7 @@ from grammar_parser import _build_parser
 
 GRAMMAR_PATH = "grammars/spice.lark"
 
-COMPONENT_PREFIXES = set("RCLVIDQMXKJrclvidqmxkj")
+COMPONENT_PREFIXES = set("RCLVIDQMXKJGEFHBSWrclvidqmxkjgefhbsw")
 
 
 def extract_netlist(prediction: str) -> str:
@@ -54,6 +54,10 @@ _COMP_NODE_COUNT = {
     "J": 3,
     "K": 0,
     "X": -1,
+    "G": 4, "E": 4,
+    "F": 2, "H": 2,
+    "B": 2,
+    "S": 4, "W": 2,
 }
 
 

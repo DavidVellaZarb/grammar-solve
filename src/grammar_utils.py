@@ -22,8 +22,9 @@ SPICE_GENERIC_TERMINALS = frozenset({
     "IDENTIFIER",
     "COMP_R", "COMP_C", "COMP_L", "COMP_V", "COMP_I",
     "COMP_D", "COMP_M", "COMP_Q", "COMP_J", "COMP_X", "COMP_K",
+    "COMP_G", "COMP_E", "COMP_F", "COMP_H", "COMP_B", "COMP_S", "COMP_W",
     "SI_VALUE", "NUMBER", "EXPRESSION",
-    "NODE_ZERO",
+    "NODE_ZERO", "DIGIT_ID",
 })
 
 OPENSCAD_GENERIC_TERMINALS = frozenset({"NUMBER", "ESCAPED_STRING"})

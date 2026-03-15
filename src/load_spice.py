@@ -11,13 +11,13 @@ from grammar_parser import _build_parser, _detect_repetition_rules, _walk_tree
 from grammar_utils import SPICE_GENERIC_TERMINALS
 
 SKIP_RULES = {"netlist", "netlist_body", "title_line", "end_line", "comment_line",
-              "subckt_body"}
+              "subckt_body", "fallback_line"}
 
 GRAMMAR_PATH = "grammars/spice.lark"
 
 
 def _preprocess_netlist(raw: str) -> str:
-    """Merge continuation lines (+), strip comments (*), normalize whitespace."""
+    """Merge continuation lines, strip comments, normalize whitespace."""
     lines = raw.splitlines()
     merged: list[str] = []
 
@@ -27,16 +27,58 @@ def _preprocess_netlist(raw: str) -> str:
             continue
         if stripped.startswith("*"):
             continue
+
+        stripped = re.sub(r"\s*;.*$", "", stripped)
+        stripped = re.sub(r"\s+\*\s+.*$", "", stripped)
+
+        stripped = re.sub(r"<[^>]*>", "PLACEHOLDER", stripped)
+        stripped = re.sub(r"\[[^\]]*\]", "PLACEHOLDER", stripped)
+
+        if re.match(r"\.[A-Za-z]", stripped):
+            word = stripped.split()[0].lower()
+            known_dots = {".model", ".subckt", ".ends", ".tran", ".dc", ".ac", ".op",
+                          ".param", ".lib", ".include", ".options", ".ic", ".control",
+                          ".endc", ".print", ".plot", ".meas", ".measure", ".global",
+                          ".temp", ".nodeset", ".save", ".tf", ".end", ".node"}
+            if word not in known_dots:
+                stripped = stripped[1:]
+
+        stripped = stripped.rstrip()
+        if not stripped:
+            continue
+
         if stripped.startswith("+") and merged:
             merged[-1] = merged[-1] + " " + stripped[1:].strip()
         else:
             merged.append(stripped)
 
+    valid_start = set("RCLVIDQMXKJGEFHBSWrclvidqmxkjgefhbsw.")
+    filtered = []
+    for i, line in enumerate(merged):
+        if i == 0:
+            filtered.append(line)
+            continue
+        first_char = line.lstrip()[0] if line.lstrip() else ""
+        if first_char in valid_start or line.strip().lower() == ".end":
+            filtered.append(line)
+    merged = filtered
+
+    has_ends = any(l.strip().lower().startswith(".ends") for l in merged)
+    if not has_ends:
+        merged = [l for l in merged if not l.strip().lower().startswith(".subckt")]
+
     has_end = any(l.strip().lower() == ".end" for l in merged)
     if not has_end:
         merged.append(".end")
 
-    result = "\n".join(re.sub(r"[ \t]+", " ", l) for l in merged)
+    fixed = []
+    for line in merged:
+        line = re.sub(r"[ \t]+", " ", line)
+        if "{" in line and "}" not in line:
+            line = line + "}"
+        fixed.append(line)
+
+    result = "\n".join(fixed)
     return result
 
 
