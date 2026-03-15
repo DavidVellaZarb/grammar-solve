@@ -13,7 +13,7 @@ def generate_grammar(
     test_path: str = "data/smcalflow/test.json",
     output_path: str = "outputs/predicted_grammars/generative.json",
     model_name: str | None = None,
-    batch_size: int = 8,
+    batch_size: int = 16,
     max_new_tokens: int = 512,
     attn_implementation: str = "flash_attention_2",
     task: str = "grammar",
