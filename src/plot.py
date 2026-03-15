@@ -266,9 +266,150 @@ def plot_multi_metrics(
     print(f"Saved plot to {output_path}")
 
 
+def _resolve_metric(data: dict, key: str):
+    """Resolve dot-notation keys from nested dicts (e.g., 'metrics.exact_match')."""
+    for part in key.split("."):
+        data = data[part]
+    return data
+
+
+def plot_bar_chart(
+    result_files: list[str],
+    labels: list[str] | None = None,
+    metric: str = "accuracy",
+    reference_lines: list[dict] | None = None,
+    output_path: str = "results/bar_chart.png",
+    title: str | None = None,
+    ylabel: str = "Accuracy",
+):
+    """Plot a bar chart from result JSON files with optional horizontal reference lines.
+
+    Args:
+        result_files: Paths to result JSON files (one per bar).
+        labels: Display labels for each bar. Uses filename stems if None.
+        metric: Key to extract from each file, supports dot notation.
+        reference_lines: List of dicts with keys:
+            - value (float) OR value_from (str, JSON path) + metric (str): the reference value
+            - label (str): legend label
+            - style (str): "dotted" or "dashed"
+            - color (str): line color
+        output_path: Where to save the figure.
+        title: Chart title.
+        ylabel: Y-axis label.
+    """
+    labels = labels or [Path(f).stem for f in result_files]
+    reference_lines = reference_lines or []
+
+    values = []
+    for path in result_files:
+        with open(path) as f:
+            data = json.load(f)
+        values.append(_resolve_metric(data, metric))
+
+    fig, ax = plt.subplots(figsize=(max(6, len(result_files) * 1.5), 5))
+    bars = ax.bar(range(len(values)), values, width=0.5)
+
+    for bar, val in zip(bars, values):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.01,
+            f"{val:.2%}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    for ref in reference_lines:
+        if "value" in ref:
+            ref_val = ref["value"]
+        else:
+            with open(ref["value_from"]) as f:
+                ref_data = json.load(f)
+            ref_val = _resolve_metric(ref_data, ref.get("metric", metric))
+        ax.axhline(
+            y=ref_val,
+            linestyle=ref.get("style", "dashed"),
+            color=ref.get("color", "gray"),
+            label=f"{ref.get('label', '')} ({ref_val:.2%})",
+        )
+
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels)
+    ax.set_ylabel(ylabel)
+    ax.set_ylim(0, 1.15)
+
+    if title:
+        ax.set_title(title)
+
+    if reference_lines:
+        ax.legend()
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Saved plot to {output_path}")
+
+
+def plot_lines(
+    result_files: list[str],
+    x_values: list[float],
+    metrics: list[str],
+    metric_labels: dict[str, str] | None = None,
+    output_path: str = "results/line_chart.png",
+    title: str | None = None,
+    xlabel: str = "x",
+    ylabel: str = "Score",
+):
+    """Plot line chart with multiple metrics across result files.
+
+    Args:
+        result_files: Paths to result JSON files (one per x-value).
+        x_values: X-axis values matching result_files.
+        metrics: List of metric keys to plot as separate lines (dot notation supported).
+        metric_labels: Mapping from metric key to display label.
+        output_path: Where to save the figure.
+        title: Chart title.
+        xlabel: X-axis label.
+        ylabel: Y-axis label.
+    """
+    metric_labels = metric_labels or {}
+
+    all_data = []
+    for path in result_files:
+        with open(path) as f:
+            all_data.append(json.load(f))
+
+    fig, ax = plt.subplots(figsize=(max(6, len(x_values) * 1.2), 5))
+
+    for m in metrics:
+        y_values = [_resolve_metric(d, m) for d in all_data]
+        label = metric_labels.get(m, m)
+        ax.plot(x_values, y_values, marker="o", label=label)
+
+        for x, y in zip(x_values, y_values):
+            ax.text(x, y + 0.01, f"{y:.2%}", ha="center", va="bottom", fontsize=9)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_ylim(0, 1.15)
+    ax.legend()
+
+    if title:
+        ax.set_title(title)
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Saved plot to {output_path}")
+
+
 if __name__ == "__main__":
     fire.Fire({
         "plot_accuracies": plot_accuracies,
         "plot_pass_at_k": plot_pass_at_k,
         "plot_multi_metrics": plot_multi_metrics,
+        "plot_bar_chart": plot_bar_chart,
+        "plot_lines": plot_lines,
     })

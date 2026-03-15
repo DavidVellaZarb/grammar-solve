@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ADAPTER="${HF_NAMESPACE}/qwen2.5-7b_smcalflow-add-remove-rule-p20"
+
+for k in 8 16 32 64 128; do
+    uv run python src/eval.py \
+        --adapter "$ADAPTER" \
+        --grammar_file outputs/predicted_grammars/rag_ablated/test_k${k}.json \
+        --test_path data/smcalflow/test.json \
+        --output_path results/rag_ablated/test_k${k}.json
+done
+
+uv run python src/plot.py plot_bar_chart \
+    --result_files '["results/rag_ablated/test_k8.json", "results/rag_ablated/test_k16.json", "results/rag_ablated/test_k32.json", "results/rag_ablated/test_k64.json", "results/rag_ablated/test_k128.json"]' \
+    --labels '["k=8", "k=16", "k=32", "k=64", "k=128"]' \
+    --reference_lines '[{"value_from": "results/baseline/baseline.json", "metric": "accuracy", "label": "Baseline (no grammar)", "style": "dotted", "color": "gray"}, {"value_from": "results/ablations_p20/add_remove_rule_p20/test.json", "metric": "accuracy", "label": "Gold grammar", "style": "dashed", "color": "green"}]' \
+    --output_path results/rag_ablated/rag_ablated_accuracy.png \
+    --title "RAG Ablated — Program Accuracy by k" \
+    --ylabel Accuracy
+
+uv run python src/plot.py plot_lines \
+    --result_files '["outputs/predicted_grammars/rag_ablated/test_k8.json", "outputs/predicted_grammars/rag_ablated/test_k16.json", "outputs/predicted_grammars/rag_ablated/test_k32.json", "outputs/predicted_grammars/rag_ablated/test_k64.json", "outputs/predicted_grammars/rag_ablated/test_k128.json"]' \
+    --x_values '[8, 16, 32, 64, 128]' \
+    --metrics '["metrics.exact_match", "metrics.relaxed_match"]' \
+    --metric_labels '{"metrics.exact_match": "Exact Match", "metrics.relaxed_match": "Relaxed Match"}' \
+    --output_path results/rag_ablated/rag_ablated_grammar_quality.png \
+    --title "RAG Ablated — Grammar Quality by k" \
+    --xlabel k \
+    --ylabel Score
