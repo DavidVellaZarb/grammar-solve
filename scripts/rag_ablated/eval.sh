@@ -6,7 +6,7 @@ ADAPTER="${HF_NAMESPACE}/qwen2.5-7b_smcalflow-add-remove-rule-p20"
 for k in 8 16 32 64 128; do
     uv run python src/eval.py \
         --adapter "$ADAPTER" \
-        --grammar_file outputs/predicted_grammars/rag_ablated/test_k${k}.json \
+        --grammar_file outputs/predicted_grammars/rag/test_k${k}.json \
         --test_path data/smcalflow/test.json \
         --output_path results/rag_ablated/test_k${k}.json
 done
