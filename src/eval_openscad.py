@@ -116,8 +116,9 @@ def evaluate(
     adapter: str,
     test_path: str = "data/openscad/test.json",
     model_name: str | None = None,
-    batch_size: int = 4,
+    batch_size: int = 8,
     max_new_tokens: int = 2048,
+    max_prompt_tokens: int = 4096,
     output_path: str | None = None,
     attn_implementation: str = "flash_attention_2",
     grammar_file: str | None = None,
@@ -186,7 +187,8 @@ def evaluate(
         batch_examples = examples[i : i + batch_size]
 
         inputs = tokenizer(
-            batch_prompts, return_tensors="pt", padding=True, truncation=True
+            batch_prompts, return_tensors="pt", padding=True,
+            truncation=True, max_length=max_prompt_tokens,
         ).to(model.device)
 
         with torch.no_grad():
