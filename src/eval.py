@@ -18,7 +18,7 @@ def evaluate(
     adapter: str,
     test_path: str = "data/smcalflow/test.json",
     model_name: str | None = None,
-    batch_size: int = 8,
+    batch_size: int = 16,
     max_new_tokens: int = 512,
     output_path: str | None = None,
     attn_implementation: str = "flash_attention_2",
