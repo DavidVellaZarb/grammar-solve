@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Requires ngspice for simulation: apt-get install -y ngspice
-
 uv run python src/eval_spice.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_spice-baseline" \
     --test_path data/spice/test.json \

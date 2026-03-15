@@ -226,7 +226,7 @@ def evaluate(
     adapter: str,
     test_path: str = "data/spice/test.json",
     model_name: str | None = None,
-    batch_size: int = 4,
+    batch_size: int = 16,
     max_new_tokens: int = 2048,
     output_path: str | None = None,
     attn_implementation: str = "flash_attention_2",
@@ -271,7 +271,6 @@ def evaluate(
     else:
         print("Using gold grammars from test data")
 
-    # Install ngspice: apt-get install -y ngspice
     if shutil.which("ngspice") is None:
         raise RuntimeError("ngspice not found on PATH (install with: apt-get install -y ngspice)")
 
@@ -283,7 +282,6 @@ def evaluate(
         )
         prompts.append(text)
 
-    # Phase 1: Generate all predictions (GPU-bound)
     predictions = []
     for i in tqdm(range(0, len(prompts), batch_size), desc="Generating"):
         batch_prompts = prompts[i : i + batch_size]
@@ -303,11 +301,9 @@ def evaluate(
         generated_ids = output_ids[:, prompt_len:]
         predictions.extend(tokenizer.batch_decode(generated_ids, skip_special_tokens=True))
 
-    # Free GPU memory before CPU-bound evaluation
     del model
     torch.cuda.empty_cache()
 
-    # Phase 2: Evaluate all predictions (CPU-bound, parallelized)
     eval_args = [
         (i, ex["program"], prompt, pred, ged_timeout, ngspice_timeout)
         for i, (ex, prompt, pred) in enumerate(zip(examples, prompts, predictions))
