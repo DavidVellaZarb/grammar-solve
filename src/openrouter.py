@@ -49,11 +49,16 @@ async def call_llm(
         return cache[key]
 
     async with semaphore:
+        token_param = (
+            {"max_completion_tokens": max_tokens}
+            if "openai.com" in str(client.base_url)
+            else {"max_tokens": max_tokens}
+        )
         response = await client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=0,
-            max_tokens=max_tokens,
+            **token_param,
         )
     result = (response.choices[0].message.content or "").strip()
     cache[key] = result

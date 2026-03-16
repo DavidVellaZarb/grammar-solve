@@ -3,6 +3,7 @@ import random
 
 import fire
 from dotenv import load_dotenv
+from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from tqdm import tqdm
 
@@ -12,7 +13,7 @@ from data import (
     load_raw_data,
 )
 from eval_utils import check_match, compute_metrics, save_results
-from openrouter import call_llm, load_cache, make_client, save_cache
+from openrouter import call_llm, load_cache, save_cache
 
 load_dotenv()
 
@@ -50,6 +51,36 @@ def _build_messages(
     return messages
 
 
+def _select_demos_first_k(train_data: list[dict], k: int) -> list[dict]:
+    return train_data[:k]
+
+
+def _select_demos_knn(
+    train_data: list[dict],
+    test_data: list[dict],
+    k: int,
+    embedding_model: str = "BAAI/bge-large-en-v1.5",
+    cache_dir: str = "cache/knn",
+) -> list[list[dict]]:
+    from knn import _find_knn, _load_or_compute_embeddings
+    from sentence_transformers import SentenceTransformer
+
+    train_queries = [ex["query"] for ex in train_data]
+    test_queries = [ex["query"] for ex in test_data]
+
+    model = SentenceTransformer(embedding_model)
+    train_embeddings = _load_or_compute_embeddings(
+        train_queries, model, cache_dir, embedding_model
+    )
+    test_embeddings = _load_or_compute_embeddings(
+        test_queries, model, cache_dir, embedding_model
+    )
+
+    knn_indices = _find_knn(test_embeddings, train_embeddings, k)
+
+    return [[train_data[idx] for idx in knn_indices[i]] for i in range(len(test_data))]
+
+
 async def _evaluate_async(
     test_data: list[dict],
     demos: list[dict],
@@ -58,13 +89,18 @@ async def _evaluate_async(
     cache: dict,
     max_concurrent: int,
     max_tokens: int,
+    client: AsyncOpenAI | None = None,
+    demos_per_example: list[list[dict]] | None = None,
 ) -> list[dict]:
-    client = make_client()
+    if client is None:
+        from openrouter import make_client
+        client = make_client()
     semaphore = asyncio.Semaphore(max_concurrent)
     pbar = tqdm(total=len(test_data), desc=f"ICL ({mode})")
 
-    async def process(ex: dict) -> dict:
-        messages = _build_messages(ex, demos, mode)
+    async def process(i: int, ex: dict) -> dict:
+        example_demos = demos_per_example[i] if demos_per_example else demos
+        messages = _build_messages(ex, example_demos, mode)
         prediction = await call_llm(
             client, model, messages, cache, semaphore, max_tokens
         )
@@ -78,7 +114,7 @@ async def _evaluate_async(
             "match": check_match(gold, prediction),
         }
 
-    tasks = [process(ex) for ex in test_data]
+    tasks = [process(i, ex) for i, ex in enumerate(test_data)]
     results = await asyncio.gather(*tasks)
     pbar.close()
     return list(results)
@@ -116,8 +152,78 @@ def evaluate(
     cache = load_cache(cache_path)
     print(f"Loaded cache with {len(cache)} entries")
 
+    from openrouter import make_client
+    client = make_client()
+
     results = asyncio.run(
-        _evaluate_async(test_data, demos, mode, model, cache, max_concurrent, max_tokens)
+        _evaluate_async(
+            test_data, demos, mode, model, cache, max_concurrent, max_tokens,
+            client=client,
+        )
+    )
+
+    save_cache(cache, cache_path)
+
+    metrics = compute_metrics(results)
+    print(f"Accuracy: {metrics['accuracy']:.4f} ({metrics['correct']}/{metrics['total']})")
+
+    save_results(metrics, results, output_path)
+
+
+def evaluate_gpt(
+    test_path: str = "data/smcalflow/test.json",
+    train_path: str = "data/smcalflow/train.json",
+    k: int = 64,
+    mode: str = "standard",
+    model: str = "gpt-5.4",
+    output_path: str | None = None,
+    cache_path: str | None = None,
+    max_concurrent: int = 10,
+    max_tokens: int = 2048,
+    embedding_model: str = "BAAI/bge-large-en-v1.5",
+    knn_cache_dir: str = "cache/knn",
+):
+    assert mode in ("standard", "knn", "oracle"), f"Invalid mode: {mode}"
+
+    if output_path is None:
+        model_alias = model.replace("/", "-")
+        output_path = f"results/icl_{model_alias}/{mode}_k{k}.json"
+
+    if cache_path is None:
+        model_alias = model.replace("/", "-")
+        cache_path = f"cache/icl_{model_alias}_cache.json"
+
+    train_data = load_raw_data(train_path)
+    test_data = load_raw_data(test_path)
+
+    icl_mode = "oracle" if mode == "oracle" else "standard"
+    demos_per_example = None
+
+    if mode == "knn":
+        print(f"Computing kNN demos (k={k}, model={embedding_model})...")
+        demos_per_example = _select_demos_knn(
+            train_data, test_data, k,
+            embedding_model=embedding_model,
+            cache_dir=knn_cache_dir,
+        )
+        demos = []
+    else:
+        demos = _select_demos_first_k(train_data, k)
+
+    print(f"Mode: {mode} | Model: {model} | k={k} | Test: {len(test_data)} examples")
+
+    cache = load_cache(cache_path)
+    print(f"Loaded cache with {len(cache)} entries")
+
+    from openai_client import make_client
+    client = make_client()
+
+    results = asyncio.run(
+        _evaluate_async(
+            test_data, demos, icl_mode, model, cache, max_concurrent, max_tokens,
+            client=client,
+            demos_per_example=demos_per_example,
+        )
     )
 
     save_cache(cache, cache_path)
@@ -129,4 +235,4 @@ def evaluate(
 
 
 if __name__ == "__main__":
-    fire.Fire(evaluate)
+    fire.Fire({"evaluate": evaluate, "evaluate_gpt": evaluate_gpt})
