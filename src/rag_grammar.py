@@ -1,13 +1,16 @@
 import asyncio
+import hashlib
+import json
+import os
 
 import fire
+from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 from data import load_raw_data, load_test_data
 from knn import _find_knn, _load_or_compute_embeddings
-from openrouter import call_llm, load_cache, make_client, save_cache
 from predict_utils import write_output
 
 load_dotenv()
@@ -48,22 +51,66 @@ def _build_user_message(
     return "\n".join(parts)
 
 
+def _cache_key(system: str, user: str, model: str) -> str:
+    data = json.dumps({"system": system, "user": user, "model": model}, sort_keys=True)
+    return hashlib.sha256(data.encode()).hexdigest()
+
+
+def _load_cache(path: str) -> dict:
+    if os.path.exists(path):
+        with open(path) as f:
+            return json.load(f)
+    return {}
+
+
+def _save_cache(cache: dict, path: str) -> None:
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(cache, f, indent=2)
+
+
+async def _call_anthropic(
+    client: AsyncAnthropic,
+    model: str,
+    system: str,
+    user: str,
+    cache: dict,
+    semaphore: asyncio.Semaphore,
+    max_tokens: int,
+) -> str:
+    key = _cache_key(system, user, model)
+    if key in cache:
+        return cache[key]
+    async with semaphore:
+        response = await client.messages.create(
+            model=model,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+            max_tokens=max_tokens,
+            temperature=0,
+        )
+    text = getattr(response.content[0], "text", None)
+    assert text is not None, f"Unexpected content block type: {type(response.content[0])}"
+    result = text.strip()
+    cache[key] = result
+    return result
+
+
 async def _process_example(
     ex: dict,
     neighbors: list[dict],
     system_prompt: str,
     model: str,
-    client,
+    client: AsyncAnthropic,
     cache: dict,
     semaphore: asyncio.Semaphore,
     pbar: tqdm,
     max_tokens: int,
 ) -> dict:
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": _build_user_message(ex["query"], neighbors)},
-    ]
-    response = await call_llm(client, model, messages, cache, semaphore, max_tokens)
+    user_message = _build_user_message(ex["query"], neighbors)
+    response = await _call_anthropic(
+        client, model, system_prompt, user_message, cache, semaphore, max_tokens,
+    )
     pbar.update(1)
     return {**ex, "minimal_grammar": response}
 
@@ -78,7 +125,7 @@ async def _predict_async(
     max_concurrent: int,
     max_tokens: int,
 ) -> list[dict]:
-    client = make_client()
+    client = AsyncAnthropic()
     semaphore = asyncio.Semaphore(max_concurrent)
     pbar = tqdm(total=len(test_data), desc="RAG predict")
 
@@ -101,7 +148,7 @@ def predict(
     train_path: str = "data/smcalflow/train.json",
     grammar_path: str = "grammars/smcalflow.lark",
     output_path: str = "outputs/predicted_grammars/rag/test_k8.json",
-    model: str = "anthropic/claude-opus-4.6",
+    model: str = "claude-opus-4-6",
     embedding_model: str = "BAAI/bge-large-en-v1.5",
     k: int = 8,
     cache_path: str = "cache/rag_cache.json",
@@ -135,7 +182,7 @@ def predict(
     knn_indices = _find_knn(test_embeddings, train_embeddings, k)
     print(f"Found {k}-NN for {len(test_queries)} test queries")
 
-    cache = load_cache(cache_path)
+    cache = _load_cache(cache_path)
     print(f"Loaded cache with {len(cache)} entries")
 
     results = asyncio.run(
@@ -145,7 +192,7 @@ def predict(
         )
     )
 
-    save_cache(cache, cache_path)
+    _save_cache(cache, cache_path)
     write_output(results, output_path)
 
 
