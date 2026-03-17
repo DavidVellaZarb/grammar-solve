@@ -97,11 +97,9 @@ def evaluate(
         )
         prompts.append(text)
 
-    results = []
-
-    for i in tqdm(range(0, len(prompts), batch_size), desc="Evaluating"):
+    predictions = []
+    for i in tqdm(range(0, len(prompts), batch_size), desc="Generating"):
         batch_prompts = prompts[i : i + batch_size]
-        batch_examples = examples[i : i + batch_size]
 
         inputs = tokenizer(
             batch_prompts, return_tensors="pt", padding=True, truncation=True
@@ -116,45 +114,49 @@ def evaluate(
 
         prompt_len = inputs["input_ids"].shape[1]
         generated_ids = output_ids[:, prompt_len:]
-        predictions = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+        predictions.extend(tokenizer.batch_decode(generated_ids, skip_special_tokens=True))
 
-        for ex, prompt, pred in zip(batch_examples, batch_prompts, predictions):
-            gold = ex["program"]
-            pred_smiles = extract_smiles(pred)
+    del model
+    torch.cuda.empty_cache()
 
-            exact_match = gold in pred
+    results = []
+    for ex, prompt, pred in zip(examples, prompts, predictions):
+        gold = ex["program"]
+        pred_smiles = extract_smiles(pred)
 
-            gold_canon = canonicalize_smiles(gold)
-            pred_canon = canonicalize_smiles(pred_smiles)
-            canonical_match = (
-                gold_canon is not None
-                and pred_canon is not None
-                and gold_canon == pred_canon
-            )
+        exact_match = gold in pred
 
-            valid = pred_canon is not None
+        gold_canon = canonicalize_smiles(gold)
+        pred_canon = canonicalize_smiles(pred_smiles)
+        canonical_match = (
+            gold_canon is not None
+            and pred_canon is not None
+            and gold_canon == pred_canon
+        )
 
-            fp_sim = compute_fingerprint_similarity(gold, pred_smiles)
+        valid = pred_canon is not None
 
-            gold_tokens = smiles_to_tokens(gold)
-            pred_tokens = smiles_to_tokens(pred_smiles)
-            bleu = sentence_bleu(
-                [gold_tokens],
-                pred_tokens,
-                smoothing_function=SmoothingFunction().method1,
-            )
+        fp_sim = compute_fingerprint_similarity(gold, pred_smiles)
 
-            results.append({
-                "prompt": prompt,
-                "gold": gold,
-                "prediction": pred,
-                "pred_smiles": pred_smiles,
-                "exact_match": exact_match,
-                "canonical_match": canonical_match,
-                "valid": valid,
-                "fingerprint_similarity": fp_sim,
-                "bleu": bleu,
-            })
+        gold_tokens = smiles_to_tokens(gold)
+        pred_tokens = smiles_to_tokens(pred_smiles)
+        bleu = sentence_bleu(
+            [gold_tokens],
+            pred_tokens,
+            smoothing_function=SmoothingFunction().method1,
+        )
+
+        results.append({
+            "prompt": prompt,
+            "gold": gold,
+            "prediction": pred,
+            "pred_smiles": pred_smiles,
+            "exact_match": exact_match,
+            "canonical_match": canonical_match,
+            "valid": valid,
+            "fingerprint_similarity": fp_sim,
+            "bleu": bleu,
+        })
 
     total = len(results)
     exact_count = sum(1 for r in results if r["exact_match"])

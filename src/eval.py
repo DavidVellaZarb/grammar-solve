@@ -72,11 +72,9 @@ def evaluate(
         )
         prompts.append(text)
 
-    results = []
-
-    for i in tqdm(range(0, len(prompts), batch_size), desc="Evaluating"):
+    predictions = []
+    for i in tqdm(range(0, len(prompts), batch_size), desc="Generating"):
         batch_prompts = prompts[i : i + batch_size]
-        batch_examples = examples[i : i + batch_size]
 
         inputs = tokenizer(
             batch_prompts, return_tensors="pt", padding=True, truncation=True
@@ -91,19 +89,23 @@ def evaluate(
 
         prompt_len = inputs["input_ids"].shape[1]
         generated_ids = output_ids[:, prompt_len:]
-        predictions = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+        predictions.extend(tokenizer.batch_decode(generated_ids, skip_special_tokens=True))
 
-        for ex, prompt, pred in zip(batch_examples, batch_prompts, predictions):
-            gold = ex["program"]
-            result = {
-                "prompt": prompt,
-                "gold": gold,
-                "prediction": pred,
-                "match": check_match(gold, pred),
-            }
-            if task == "grammar_program":
-                result["separator_found"] = GRAMMAR_PROGRAM_SEPARATOR in pred
-            results.append(result)
+    del model
+    torch.cuda.empty_cache()
+
+    results = []
+    for ex, prompt, pred in zip(examples, prompts, predictions):
+        gold = ex["program"]
+        result = {
+            "prompt": prompt,
+            "gold": gold,
+            "prediction": pred,
+            "match": check_match(gold, pred),
+        }
+        if task == "grammar_program":
+            result["separator_found"] = GRAMMAR_PROGRAM_SEPARATOR in pred
+        results.append(result)
 
     metrics = compute_metrics(results)
     print(f"Accuracy: {metrics['accuracy']:.4f} ({metrics['correct']}/{metrics['total']})")
