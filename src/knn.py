@@ -15,7 +15,9 @@ def _compute_embeddings(
     model: SentenceTransformer,
     batch_size: int = 256,
 ) -> np.ndarray:
-    return model.encode(texts, batch_size=batch_size, normalize_embeddings=True)
+    return model.encode(
+        texts, batch_size=batch_size, normalize_embeddings=True, show_progress_bar=True
+    )
 
 
 def _load_or_compute_embeddings(
