@@ -1,0 +1,271 @@
+netlist: title_line NEWLINE netlist_body end_line NEWLINE?
+
+title_line: REST_OF_LINE
+
+netlist_body: (statement NEWLINE)*
+
+end_line: ".end"i
+
+?statement: component
+          | dot_command
+          | comment_line
+          | fallback_line
+
+comment_line: COMMENT_LINE
+
+fallback_line: FALLBACK_LINE
+FALLBACK_LINE: /[^\n]+/
+
+?component: resistor
+          | capacitor
+          | inductor
+          | voltage_source
+          | current_source
+          | diode
+          | mosfet
+          | bjt
+          | jfet
+          | subcircuit_call
+          | coupled_inductor
+          | vccs
+          | vcvs
+          | cccs
+          | ccvs
+          | behavioral_source
+          | switch
+
+resistor: COMP_R node node node value param_assignment*
+        | COMP_R node node value? param_assignment*
+
+capacitor: COMP_C node node value? param_assignment*
+         | COMP_C node node source_spec+
+
+inductor: COMP_L node node value? param_assignment*
+
+voltage_source: COMP_V node node source_spec*
+
+current_source: COMP_I node node source_spec*
+
+diode: COMP_D node node IDENTIFIER param_assignment*
+     | COMP_D node node DIGIT_ID param_assignment*
+
+mosfet: COMP_M node node node node IDENTIFIER param_assignment*
+      | COMP_M node node node IDENTIFIER param_assignment*
+      | COMP_M node node node param_assignment*
+
+bjt: COMP_Q node node node node IDENTIFIER param_assignment*
+   | COMP_Q node node node IDENTIFIER param_assignment*
+   | COMP_Q node node node param_assignment*
+
+jfet: COMP_J node node node IDENTIFIER param_assignment*
+
+subcircuit_call: COMP_X node node node* IDENTIFIER param_assignment*
+
+coupled_inductor: COMP_K IDENTIFIER IDENTIFIER value
+
+vccs: COMP_G node node node node value
+    | COMP_G node node node value
+    | COMP_G node node value_expr
+    | COMP_G node node EXPRESSION value
+    | COMP_G node node value?
+
+vcvs: COMP_E node node node node value
+    | COMP_E node node node value
+    | COMP_E node node value_expr
+    | COMP_E node node EXPRESSION value
+    | COMP_E node node source_spec+
+
+cccs: COMP_F node node IDENTIFIER value
+    | COMP_F node node source_spec+
+
+ccvs: COMP_H node node IDENTIFIER value
+    | COMP_H node node source_spec+
+
+behavioral_source: COMP_B node node value_expr
+                 | COMP_B node node source_spec*
+
+switch: COMP_S node node node node IDENTIFIER param_assignment*
+      | COMP_S node node IDENTIFIER param_assignment*
+      | COMP_W node node IDENTIFIER IDENTIFIER param_assignment*
+      | COMP_W node node IDENTIFIER param_assignment*
+
+?source_spec: dc_spec
+            | ac_spec
+            | pulse_spec
+            | sin_spec
+            | pwl_spec
+            | exp_spec
+            | value
+
+dc_spec: "dc"i value
+       | "dc"i
+
+ac_spec: "ac"i value value?
+
+pulse_spec: "pulse"i "(" value value value value value value value? ")"
+          | "pulse"i value value value value value value value?
+
+sin_spec: "sin"i "(" value value value? value? value? ")"
+        | "sin"i value value value? value? value?
+
+pwl_spec: "pwl"i "(" pwl_pair+ ")"
+        | "pwl"i pwl_pair+
+
+pwl_pair: value value
+
+exp_spec: "exp"i "(" value value value? value? value? value? ")"
+
+value_expr: EXPRESSION
+          | "cur"i "=" EXPRESSION
+          | "v"i "=" EXPRESSION
+          | "i"i "=" EXPRESSION
+          | "value"i "=" EXPRESSION
+          | "vol"i "=" EXPRESSION
+          | "vol"i "=" IDENTIFIER
+          | "value"i "=" IDENTIFIER
+
+?dot_command: model_def
+            | subckt_def
+            | tran_cmd
+            | dc_cmd
+            | ac_cmd
+            | op_cmd
+            | param_cmd
+            | lib_cmd
+            | include_cmd
+            | options_cmd
+            | ic_cmd
+            | control_block
+            | print_cmd
+            | plot_cmd
+            | measure_cmd
+            | global_cmd
+            | temp_cmd
+            | nodeset_cmd
+            | save_cmd
+            | tf_cmd
+            | ends_cmd
+            | node_cmd
+
+model_def: ".model"i IDENTIFIER IDENTIFIER "(" param_assignment+ ")"
+         | ".model"i IDENTIFIER IDENTIFIER param_assignment*
+
+subckt_def: ".subckt"i IDENTIFIER node* param_assignment* NEWLINE subckt_body ".ends"i IDENTIFIER?
+
+subckt_body: (statement NEWLINE)*
+
+tran_cmd: ".tran"i value value value? value? "uic"i?
+        | ".tran"i value value value? value?
+
+dc_cmd: ".dc"i IDENTIFIER value value value dc_sweep_second?
+
+dc_sweep_second: IDENTIFIER value value value
+
+ac_cmd: ".ac"i IDENTIFIER value value value
+
+op_cmd: ".op"i
+
+param_cmd: ".param"i param_assignment+
+
+lib_cmd: ".lib"i REST_OF_LINE
+
+include_cmd: ".include"i REST_OF_LINE
+
+options_cmd: ".options"i param_assignment+
+           | ".options"i IDENTIFIER+
+
+ic_cmd: ".ic"i ic_assignment+
+
+ic_assignment: IDENTIFIER "=" value
+             | "v"i "(" node ")" "=" value
+
+control_block: ".control"i NEWLINE control_body_lines ".endc"i
+
+control_body_lines: (CONTROL_LINE NEWLINE)*
+
+CONTROL_LINE: /[^\n]+/
+
+print_cmd: ".print"i IDENTIFIER print_expr+
+
+print_expr: IDENTIFIER "(" node ("," node)* ")"
+          | IDENTIFIER
+
+plot_cmd: ".plot"i IDENTIFIER print_expr+
+
+measure_cmd: ".meas"i IDENTIFIER IDENTIFIER REST_OF_LINE
+           | ".measure"i IDENTIFIER IDENTIFIER REST_OF_LINE
+
+global_cmd: ".global"i node+
+
+temp_cmd: ".temp"i value+
+
+nodeset_cmd: ".nodeset"i ic_assignment+
+
+save_cmd: ".save"i print_expr+
+
+tf_cmd: ".tf"i print_expr IDENTIFIER
+
+ends_cmd: ".ends"i IDENTIFIER?
+
+node_cmd: ".node"i REST_OF_LINE
+
+param_assignment: IDENTIFIER "=" value
+               | IDENTIFIER "=" EXPRESSION
+
+?node: NODE_ZERO
+     | IDENTIFIER
+     | NUMBER
+     | DIGIT_ID
+
+?value: SI_VALUE
+      | NUMBER
+      | EXPRESSION
+      | IDENTIFIER
+      | NODE_ZERO
+      | DIGIT_ID
+
+COMP_R: /[Rr][\w']*/
+COMP_C: /[Cc][\w']*/
+COMP_L: /[Ll][\w']*/
+COMP_V: /[Vv][\w'+\-]*/
+COMP_I: /[Ii][\w']*/
+COMP_D: /[Dd][\w']*/
+COMP_M: /[Mm][\w']*/
+COMP_Q: /[Qq][\w']*/
+COMP_J: /[Jj][\w']*/
+COMP_X: /[Xx][\w']*/
+COMP_K: /[Kk][\w']*/
+COMP_G: /[Gg][\w']*/
+COMP_E: /[Ee][\w']*/
+COMP_F: /[Ff][\w']*/
+COMP_H: /[Hh][\w']*/
+COMP_B: /[Bb][\w']*/
+COMP_S: /[Ss][\w']*/
+COMP_W: /[Ww][\w']*/
+
+NODE_ZERO: "0"
+
+SI_VALUE.2: /[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?[TGMkKmunpfaVAFHW][a-zA-Z]*/
+          | /[+-]?(\d+\.?\d*|\.\d+)[eE][+-]?\d+/
+
+NUMBER.1: /[+-]?\d+\.?\d*/
+        | /[+-]?\.\d+/
+
+DIGIT_ID: /\d+[a-zA-Z_]\w*/
+
+IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9_.+\-']*(\([a-zA-Z0-9_.,]*\))?/
+
+EXPRESSION.3: /\{[^}]+\}/
+            | /[a-zA-Z_]\w*[*\/][a-zA-Z_(\d)]\S*/
+            | /\d+\w*\/\S+/
+            | /\([^)]+\)/
+            | /-[a-zA-Z_]\w*/
+            | /'[^']+'/
+
+COMMENT_LINE: /\*[^\n]*/
+
+REST_OF_LINE: /[^\n]+/
+
+NEWLINE: /\n/
+
+%ignore /[ \t]+/

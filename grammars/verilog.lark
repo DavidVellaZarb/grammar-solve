@@ -1,0 +1,473 @@
+start: module
+
+module: attribute* "module" IDENTIFIER parameter_list? list_of_ports? ";" module_item* "endmodule"
+
+parameter_list: "#" "(" param_list_body ")"
+
+param_list_body: param_list_item ("," param_list_item)*
+
+?param_list_item: parameter_declaration
+               | param_assignment
+
+list_of_ports: "(" port_item ("," port_item)* ")"
+             | "(" ")"
+
+?port_item: port_declaration
+          | IDENTIFIER
+
+port_declaration: attribute* port_dir net_or_reg? signed? range? IDENTIFIER
+
+port_dir: "input" | "output" | "inout"
+
+net_or_reg: "wire" | "reg" | "logic"
+
+attribute: "(*" attr_spec ("," attr_spec)* "*)"
+
+attr_spec: IDENTIFIER "=" expression
+         | IDENTIFIER
+
+?module_item: attribute* module_item_inner
+
+?module_item_inner: port_decl_stmt
+                  | net_declaration
+                  | reg_declaration
+                  | integer_declaration
+                  | real_declaration
+                  | parameter_decl_stmt
+                  | localparam_decl_stmt
+                  | genvar_declaration
+                  | continuous_assign
+                  | always_construct
+                  | initial_construct
+                  | module_instantiation
+                  | generate_block
+                  | function_declaration
+                  | task_declaration
+                  | specify_block
+                  | defparam_stmt
+                  | gate_instantiation
+                  | typedef_declaration
+                  | custom_type_declaration
+                  | PREPROC_DIRECTIVE
+
+PREPROC_DIRECTIVE: /`(?:define|ifdef|ifndef|else|endif|include|undef|timescale|default_nettype|celldefine|endcelldefine|resetall|pragma)[^\n]*/
+
+port_decl_stmt: port_dir net_or_reg? signed? range? list_of_port_variables ";"
+
+list_of_port_variables: port_variable ("," port_variable)*
+
+port_variable: IDENTIFIER array_dimensions?
+             | IDENTIFIER "=" expression
+
+net_declaration: net_type signed? range? list_of_net_variables ";"
+
+net_type: "wire" | "tri" | "supply0" | "supply1" | "wand" | "wor" | "tri0" | "tri1" | "logic"
+
+list_of_net_variables: net_variable ("," net_variable)*
+
+net_variable: IDENTIFIER array_dimensions?
+            | IDENTIFIER array_dimensions? "=" expression
+
+reg_declaration: "reg" signed? range? list_of_reg_variables ";"
+
+list_of_reg_variables: reg_variable ("," reg_variable)*
+
+reg_variable: IDENTIFIER array_dimensions?
+            | IDENTIFIER array_dimensions? "=" expression
+
+array_dimensions: dimension+
+
+dimension: "[" expression ":" expression "]"
+         | "[" expression "]"
+
+integer_declaration: "integer" list_of_int_variables ";"
+
+list_of_int_variables: int_variable ("," int_variable)*
+
+int_variable: IDENTIFIER array_dimensions?
+            | IDENTIFIER "=" expression
+
+real_declaration: "real" list_of_variables ";"
+
+parameter_declaration: "parameter" param_type? signed? range? param_assignment
+
+param_type: "integer" | "real" | "realtime" | "time"
+
+parameter_decl_stmt: "parameter" param_type? signed? range? param_assignment_list ";"
+
+localparam_decl_stmt: "localparam" param_type? signed? range? param_assignment_list ";"
+
+param_assignment_list: param_assignment ("," param_assignment)*
+
+param_assignment: IDENTIFIER "=" expression
+
+genvar_declaration: "genvar" list_of_variables ";"
+
+typedef_declaration: "typedef" "enum" typedef_base_type? "{" enum_list "}" IDENTIFIER ";"
+typedef_base_type: "logic" range?
+enum_list: IDENTIFIER ("," IDENTIFIER)*
+
+custom_type_declaration: IDENTIFIER IDENTIFIER ("," IDENTIFIER)* ";"
+
+defparam_stmt: "defparam" defparam_assignment_list ";"
+
+defparam_assignment_list: defparam_assignment ("," defparam_assignment)*
+
+defparam_assignment: hier_identifier "=" expression
+
+hier_identifier: IDENTIFIER ("." IDENTIFIER)*
+
+signed: "signed"
+
+range: "[" expression ":" expression "]"
+
+list_of_variables: IDENTIFIER ("," IDENTIFIER)*
+
+list_of_assignments: assignment ("," assignment)*
+
+continuous_assign: "assign" drive_strength? delay_value? list_of_assignments ";"
+
+drive_strength: "(" strength "," strength ")"
+
+strength: "strong0" | "strong1" | "pull0" | "pull1"
+        | "weak0" | "weak1" | "highz0" | "highz1"
+
+always_construct: "always" "@" "(" sensitivity_list ")" statement
+                | "always" "@" "(" "*" ")" statement
+                | "always" "@" "*" statement
+                | "always" statement
+                | "always_ff" "@" "(" sensitivity_list ")" statement
+                | "always_comb" statement
+                | "always_latch" statement
+
+initial_construct: "initial" statement
+
+sensitivity_list: sensitivity_item (SENS_SEP sensitivity_item)*
+
+sensitivity_item: edge_identifier expression
+                | expression
+
+edge_identifier: "posedge" | "negedge"
+
+SENS_SEP: "or" | ","
+
+?statement: blocking_assignment ";"
+          | nonblocking_assignment ";"
+          | compound_assignment ";"
+          | conditional_statement
+          | case_statement
+          | loop_statement
+          | seq_block
+          | par_block
+          | system_task_call ";"
+          | task_enable ";"
+          | disable_statement ";"
+          | force_statement ";"
+          | release_statement ";"
+          | deassign_statement ";"
+          | delay_statement
+          | event_trigger ";"
+          | wait_statement
+          | assign_statement ";"
+          | ";"
+
+seq_block: "begin" statement* "end"
+         | "begin" ":" IDENTIFIER block_decl* statement* "end"
+
+par_block: "fork" statement* "join"
+         | "fork" ":" IDENTIFIER block_decl* statement* "join"
+
+?block_decl: reg_declaration
+           | integer_declaration
+           | real_declaration
+           | parameter_decl_stmt
+           | localparam_decl_stmt
+
+blocking_assignment: lvalue "=" delay_or_event? expression
+
+nonblocking_assignment: lvalue "<=" delay_or_event? expression
+
+compound_assignment: lvalue COMPOUND_OP expression
+COMPOUND_OP: "+=" | "-=" | "&=" | "|=" | "^=" | "<<=" | ">>="
+
+assign_statement: "assign" lvalue "=" expression
+
+conditional_statement: "if" "(" expression ")" statement "else" statement
+                     | "if" "(" expression ")" statement
+
+case_statement: case_keyword "(" expression ")" case_item+ "endcase"
+
+case_keyword: "case" | "casex" | "casez"
+
+case_item: expression ("," expression)* ":" statement
+         | "default" ":"? statement
+
+loop_statement: "for" "(" blocking_assignment ";" expression ";" blocking_assignment ")" statement
+              | "for" "(" blocking_assignment ";" expression ";" incr_decr ")" statement
+              | "for" "(" for_var_decl ";" expression ";" blocking_assignment ")" statement
+              | "for" "(" for_var_decl ";" expression ";" incr_decr ")" statement
+              | "while" "(" expression ")" statement
+              | "repeat" "(" expression ")" statement
+              | "forever" statement
+
+for_var_decl: FOR_VAR_TYPE IDENTIFIER "=" expression
+FOR_VAR_TYPE: "int" | "integer"
+
+incr_decr: lvalue "++"
+         | lvalue "--"
+
+delay_statement: delay_value statement
+
+delay_or_event: delay_value
+              | "@" "(" sensitivity_list ")"
+              | "@" "(" "*" ")"
+
+delay_value: "#" expression
+           | "#" "(" expression ")"
+
+event_trigger: "->" IDENTIFIER
+
+wait_statement: "wait" "(" expression ")" statement
+
+disable_statement: "disable" IDENTIFIER
+
+force_statement: "force" lvalue "=" expression
+
+release_statement: "release" lvalue
+
+deassign_statement: "deassign" lvalue
+
+system_task_call: SYSTEM_TASK
+                | SYSTEM_TASK "(" expression_list? ")"
+
+SYSTEM_TASK: "$" CNAME
+
+task_enable: hier_identifier "(" expression_list? ")"
+           | hier_identifier
+
+module_instantiation: IDENTIFIER param_value_list? module_instance ("," module_instance)* ";"
+
+param_value_list: "#" "(" expression_list ")"
+               | "#" "(" named_param_list ")"
+               | "#" "(" ")"
+
+named_param_list: named_param ("," named_param)*
+
+named_param: "." IDENTIFIER "(" expression? ")"
+
+module_instance: IDENTIFIER "(" list_of_module_connections? ")"
+
+list_of_module_connections: module_port_connection ("," module_port_connection)*
+                          | named_port_connection ("," named_port_connection)*
+
+module_port_connection: expression?
+
+named_port_connection: "." IDENTIFIER "(" expression? ")"
+                     | "." IDENTIFIER
+
+generate_block: "generate" generate_item* "endgenerate"
+
+?generate_item: module_item
+              | generate_conditional
+              | generate_loop
+              | generate_case
+              | gen_block
+
+generate_conditional: "if" "(" expression ")" generate_block_or_item "else" generate_block_or_item
+                    | "if" "(" expression ")" generate_block_or_item
+
+generate_loop: "for" "(" genvar_assignment ";" expression ";" genvar_assignment ")" gen_block
+
+genvar_assignment: IDENTIFIER "=" expression
+
+generate_case: "case" "(" expression ")" generate_case_item+ "endcase"
+
+generate_case_item: expression ("," expression)* ":" generate_block_or_item
+                  | "default" ":"? generate_block_or_item
+
+?generate_block_or_item: gen_block | generate_item
+
+gen_block: "begin" generate_item* "end"
+         | "begin" ":" IDENTIFIER generate_item* "end"
+
+function_declaration: "function" "automatic"? signed? range_or_type? IDENTIFIER ";" function_item* statement "endfunction"
+                    | "function" "automatic"? signed? range_or_type? IDENTIFIER "(" function_port_list ")" ";" function_item_no_port* statement "endfunction"
+
+?range_or_type: range | "integer" | "real"
+
+function_port_list: function_port ("," function_port)*
+
+function_port: port_dir? net_or_reg? signed? range? IDENTIFIER
+
+?function_item: port_decl_stmt | block_decl
+
+?function_item_no_port: block_decl
+
+task_declaration: "task" "automatic"? IDENTIFIER ";" task_item* statement "endtask"
+               | "task" "automatic"? IDENTIFIER "(" function_port_list ")" ";" task_item_no_port* statement "endtask"
+
+?task_item: port_decl_stmt | block_decl
+
+?task_item_no_port: block_decl
+
+gate_instantiation: GATE_TYPE gate_strength? delay_value? gate_instance ("," gate_instance)* ";"
+
+GATE_TYPE: "and" | "nand" | "or" | "nor" | "xor" | "xnor"
+         | "buf" | "not" | "bufif0" | "bufif1" | "notif0" | "notif1"
+         | "pullup" | "pulldown" | "pmos" | "nmos" | "cmos"
+         | "rpmos" | "rnmos" | "rcmos" | "tran" | "tranif0" | "tranif1"
+         | "rtran" | "rtranif0" | "rtranif1"
+
+gate_strength: "(" strength "," strength ")"
+
+gate_instance: IDENTIFIER? "(" expression_list ")"
+
+specify_block: "specify" specify_item* "endspecify"
+
+?specify_item: specparam_declaration | path_declaration | system_timing_check
+
+specparam_declaration: "specparam" param_assignment_list ";"
+
+path_declaration: "(" specify_path ")" "=" expression ";"
+               | "(" specify_path ")" "=" "(" expression_list ")" ";"
+
+specify_path: lvalue "=>" lvalue
+            | lvalue "*>" lvalue
+            | lvalue "=>>" lvalue
+            | lvalue "*>>" lvalue
+
+system_timing_check: SYSTEM_TASK "(" expression_list? ")" ";"
+
+expression_list: expression ("," expression)*
+
+?expression: conditional_expression
+
+?conditional_expression: logical_or
+                       | logical_or "?" expression ":" expression
+
+?logical_or: logical_and
+           | logical_or "||" logical_and
+
+?logical_and: bitwise_or
+            | logical_and "&&" bitwise_or
+
+?bitwise_or: bitwise_xor
+           | bitwise_or "|" bitwise_xor
+
+?bitwise_xor: bitwise_and
+            | bitwise_xor "^" bitwise_and
+            | bitwise_xor "~^" bitwise_and
+            | bitwise_xor "^~" bitwise_and
+
+?bitwise_and: equality
+            | bitwise_and "&" equality
+
+?equality: comparison
+         | equality "==" comparison
+         | equality "!=" comparison
+         | equality "===" comparison
+         | equality "!==" comparison
+
+?comparison: shift
+           | comparison "<" shift
+           | comparison ">" shift
+           | comparison "<=" shift
+           | comparison ">=" shift
+
+?shift: addition
+      | shift "<<" addition
+      | shift ">>" addition
+      | shift "<<<" addition
+      | shift ">>>" addition
+
+?addition: multiplication
+         | addition "+" multiplication
+         | addition "-" multiplication
+
+?multiplication: power
+               | multiplication "*" power
+               | multiplication "/" power
+               | multiplication "%" power
+
+?power: unary
+      | power "**" unary
+
+?unary: primary
+      | "!" primary
+      | "~" primary
+      | "&" primary
+      | "~&" primary
+      | "|" primary
+      | "~|" primary
+      | "^" primary
+      | "~^" primary
+      | "+" primary
+      | "-" primary
+
+?primary: number
+        | string
+        | identifier_ref
+        | concatenation
+        | replication
+        | function_call
+        | system_function_call
+        | "(" expression ")"
+        | mintypmax_expr
+        | type_cast
+        | MACRO_USAGE
+
+type_cast: IDENTIFIER "'" "(" expression ")"
+
+mintypmax_expr: "(" expression ":" expression ":" expression ")"
+
+identifier_ref: hier_identifier
+              | hier_identifier "[" expression "]"
+              | hier_identifier "[" expression ":" expression "]"
+              | hier_identifier "[" expression "+:" expression "]"
+              | hier_identifier "[" expression "-:" expression "]"
+              | hier_identifier dimension+
+
+concatenation: "{" expression_list "}"
+
+replication: "{" expression "{" expression_list "}" "}"
+
+function_call: IDENTIFIER "(" expression_list? ")"
+
+system_function_call: SYSTEM_TASK "(" expression_list? ")"
+                    | SYSTEM_TASK
+
+?lvalue: identifier_ref
+       | concatenation
+
+assignment: lvalue "=" expression
+
+number: SIZED_NUMBER
+      | BASED_NUMBER
+      | DECIMAL_NUMBER
+      | REAL_NUMBER
+      | XZ_LITERAL
+
+string: ESCAPED_STRING
+
+SIZED_NUMBER: /[0-9]+\s*'[sS]?[bBoOdDhH][0-9a-fA-FxXzZ_?]+/
+BASED_NUMBER: /'[sS]?[bBoOdDhH][0-9a-fA-FxXzZ_?]+/
+DECIMAL_NUMBER: /[0-9][0-9_]*/
+REAL_NUMBER: /[0-9][0-9_]*\.[0-9][0-9_]*/
+XZ_LITERAL: /'[xXzZ01]/
+
+IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9_$]*/
+          | /\\[^\s]+/
+
+MACRO_USAGE: /`[a-zA-Z_][a-zA-Z0-9_]*(\([^)]*\))?/
+
+%import common.CNAME
+%import common.ESCAPED_STRING
+%import common.WS
+
+COMMENT: "//" /[^\n]*/
+MULTILINE_COMMENT: /\/\*(\*(?!\/)|[^*])*\*\//
+
+%ignore WS
+%ignore COMMENT
+%ignore MULTILINE_COMMENT
+%ignore PREPROC_DIRECTIVE

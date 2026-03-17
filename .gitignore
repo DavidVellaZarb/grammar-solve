@@ -210,7 +210,6 @@ __marimo__/
 .DS_Store
 
 # Project specific
-grammars/
 /data/
 results/
 outputs/
