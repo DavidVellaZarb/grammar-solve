@@ -3,8 +3,6 @@ import random
 
 import fire
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletionMessageParam
 from tqdm import tqdm
 
 from data import (
@@ -13,7 +11,7 @@ from data import (
     load_raw_data,
 )
 from eval_utils import check_match, compute_metrics, save_results
-from openrouter import call_llm, load_cache, save_cache
+from llm_client import LLMClient, load_cache, save_cache
 
 load_dotenv()
 
@@ -35,11 +33,11 @@ def _build_messages(
     example: dict,
     demos: list[dict],
     mode: str,
-) -> list[ChatCompletionMessageParam]:
+) -> list[dict]:
     system_prompt = (
         SYSTEM_PROMPT_WITH_GRAMMAR if mode == "oracle" else SYSTEM_PROMPT_WITHOUT_GRAMMAR
     )
-    messages: list[ChatCompletionMessageParam] = [
+    messages: list[dict] = [
         {"role": "system", "content": system_prompt}
     ]
 
@@ -85,25 +83,18 @@ async def _evaluate_async(
     test_data: list[dict],
     demos: list[dict],
     mode: str,
-    model: str,
+    llm: LLMClient,
     cache: dict,
     max_concurrent: int,
-    max_tokens: int,
-    client: AsyncOpenAI | None = None,
     demos_per_example: list[list[dict]] | None = None,
 ) -> list[dict]:
-    if client is None:
-        from openrouter import make_client
-        client = make_client()
     semaphore = asyncio.Semaphore(max_concurrent)
     pbar = tqdm(total=len(test_data), desc=f"ICL ({mode})")
 
     async def process(i: int, ex: dict) -> dict:
         example_demos = demos_per_example[i] if demos_per_example else demos
         messages = _build_messages(ex, example_demos, mode)
-        prediction = await call_llm(
-            client, model, messages, cache, semaphore, max_tokens
-        )
+        prediction = await llm.call(messages, cache, semaphore)
         gold = ex["program"]
         pbar.update(1)
         return {
@@ -131,6 +122,7 @@ def evaluate(
     cache_path: str | None = None,
     max_concurrent: int = 10,
     max_tokens: int = 2048,
+    api: str = "openrouter",
 ):
     assert mode in ("standard", "oracle"), f"Invalid mode: {mode}"
 
@@ -152,13 +144,11 @@ def evaluate(
     cache = load_cache(cache_path)
     print(f"Loaded cache with {len(cache)} entries")
 
-    from openrouter import make_client
-    client = make_client()
+    llm = LLMClient(api=api, model=model, max_tokens=max_tokens)
 
     results = asyncio.run(
         _evaluate_async(
-            test_data, demos, mode, model, cache, max_concurrent, max_tokens,
-            client=client,
+            test_data, demos, mode, llm, cache, max_concurrent,
         )
     )
 
@@ -182,6 +172,7 @@ def evaluate_gpt(
     max_tokens: int = 2048,
     embedding_model: str = "BAAI/bge-large-en-v1.5",
     knn_cache_dir: str = "cache/knn",
+    api: str = "openai",
 ):
     assert mode in ("standard", "knn", "oracle"), f"Invalid mode: {mode}"
 
@@ -215,13 +206,11 @@ def evaluate_gpt(
     cache = load_cache(cache_path)
     print(f"Loaded cache with {len(cache)} entries")
 
-    from openai_client import make_client
-    client = make_client()
+    llm = LLMClient(api=api, model=model, max_tokens=max_tokens)
 
     results = asyncio.run(
         _evaluate_async(
-            test_data, demos, icl_mode, model, cache, max_concurrent, max_tokens,
-            client=client,
+            test_data, demos, icl_mode, llm, cache, max_concurrent,
             demos_per_example=demos_per_example,
         )
     )

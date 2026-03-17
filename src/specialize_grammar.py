@@ -5,7 +5,6 @@ import random
 
 import fire
 from dotenv import load_dotenv
-from openai.types.chat import ChatCompletionMessageParam
 from tqdm import tqdm
 
 from data import load_raw_data
@@ -15,7 +14,7 @@ from grammar_utils import (
     parse_minimal_grammar,
     reconstruct_minimal_grammar,
 )
-from openrouter import call_llm, load_cache, make_client, save_cache
+from llm_client import LLMClient, load_cache, save_cache
 
 load_dotenv()
 
@@ -106,8 +105,8 @@ def _build_messages(
     query: str,
     grammar: str,
     icl_examples: list[dict],
-) -> list[ChatCompletionMessageParam]:
-    messages: list[ChatCompletionMessageParam] = [
+) -> list[dict]:
+    messages: list[dict] = [
         {"role": "system", "content": SYSTEM_PROMPT}
     ]
 
@@ -136,8 +135,7 @@ def _build_messages(
 
 async def _process_example(
     ex: dict,
-    model: str,
-    client,
+    llm: LLMClient,
     icl_examples: list[dict],
     cache: dict,
     semaphore: asyncio.Semaphore,
@@ -151,7 +149,7 @@ async def _process_example(
         return ex, False
 
     messages = _build_messages(ex["query"], grammar, icl_examples)
-    response = await call_llm(client, model, messages, cache, semaphore)
+    response = await llm.call(messages, cache, semaphore)
 
     predicted = parse_minimal_grammar(response)
     specialized_grammar = replace_generic_rules(grammar, predicted)
@@ -162,17 +160,16 @@ async def _process_example(
 
 async def _specialize_async(
     test_data: list[dict],
-    model: str,
+    llm: LLMClient,
     icl_examples: list[dict],
     cache: dict,
     max_concurrent: int,
 ) -> tuple[list[dict], int, int]:
-    client = make_client()
     semaphore = asyncio.Semaphore(max_concurrent)
     pbar = tqdm(total=len(test_data), desc="Specializing")
 
     tasks = [
-        _process_example(ex, model, client, icl_examples, cache, semaphore, pbar)
+        _process_example(ex, llm, icl_examples, cache, semaphore, pbar)
         for ex in test_data
     ]
     outcomes = await asyncio.gather(*tasks)
@@ -201,6 +198,7 @@ def specialize(
     seed: int = 42,
     cache_path: str = "cache/specialize_cache.json",
     max_concurrent: int = 10,
+    api: str = "openrouter",
 ):
     train_data = load_raw_data(train_path)
     train_generic_data = load_raw_data(train_generic_path)
@@ -217,8 +215,10 @@ def specialize(
     cache = load_cache(cache_path)
     print(f"Loaded cache with {len(cache)} entries")
 
+    llm = LLMClient(api=api, model=model)
+
     results, n_specialized, n_skipped = asyncio.run(
-        _specialize_async(test_data, model, icl_examples, cache, max_concurrent)
+        _specialize_async(test_data, llm, icl_examples, cache, max_concurrent)
     )
 
     save_cache(cache, cache_path)
