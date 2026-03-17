@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
-from data import load_raw_data
+from data import load_raw_data, load_test_data
 from knn import _find_knn, _load_or_compute_embeddings
 from openrouter import call_llm, load_cache, make_client, save_cache
 from predict_utils import write_output
@@ -14,7 +14,7 @@ load_dotenv()
 
 SYSTEM_PROMPT_TEMPLATE = (
     "You are a grammar prediction assistant for semantic parsing. You are given:\n"
-    "1. A reference grammar defining all valid rules for a calendar-domain language\n"
+    "1. A reference grammar defining all valid rules for a formal language\n"
     "2. Similar example queries with their minimal grammars and programs\n\n"
     "Your task: given a new query, predict the minimal grammar needed to parse it.\n\n"
     "Guidelines:\n"
@@ -65,11 +65,7 @@ async def _process_example(
     ]
     response = await call_llm(client, model, messages, cache, semaphore, max_tokens)
     pbar.update(1)
-    return {
-        "query": ex["query"],
-        "minimal_grammar": response,
-        "program": ex["program"],
-    }
+    return {**ex, "minimal_grammar": response}
 
 
 async def _predict_async(
@@ -115,7 +111,7 @@ def predict(
     batch_size: int = 256,
 ):
     train_data = load_raw_data(train_path)
-    test_data = load_raw_data(test_path)
+    test_data = load_test_data(test_path)
 
     with open(grammar_path) as f:
         full_grammar = f.read()
