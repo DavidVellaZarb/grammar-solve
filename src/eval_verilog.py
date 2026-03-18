@@ -57,7 +57,7 @@ def evaluate(
     adapter: str,
     problem_file: str = "data/verilog_eval/VerilogEval_Machine.jsonl",
     model_name: str | None = None,
-    batch_size: int = 8,
+    batch_size: int = 64,
     max_new_tokens: int = 1024,
     n_samples: int = 1,
     temperature: float = 0.0,
