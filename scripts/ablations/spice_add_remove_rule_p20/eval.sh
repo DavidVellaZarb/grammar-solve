@@ -3,7 +3,6 @@ set -euo pipefail
 
 ADAPTER="${HF_NAMESPACE}/qwen2.5-7b_spice-add-remove-rule-p20"
 RESULTS_DIR="results/ablations/spice_add_remove_rule_p20"
-mkdir -p "$RESULTS_DIR"
 
 uv run python src/eval_spice.py \
     --adapter "$ADAPTER" \
@@ -13,8 +12,8 @@ uv run python src/eval_spice.py \
 
 uv run python src/eval_spice.py \
     --adapter "$ADAPTER" \
-    --grammar_file outputs/predicted_grammars/rag/spice_test_k64.json \
     --test_path data/spice/test.json \
+    --grammar_file outputs/predicted_grammars/rag/spice_test_k64.json \
     --output_path "$RESULTS_DIR/rag_grammar.json"
 
 uv run python src/plot.py plot_multi_metrics \

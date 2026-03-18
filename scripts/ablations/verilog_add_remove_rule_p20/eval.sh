@@ -8,7 +8,6 @@ fi
 
 ADAPTER="${HF_NAMESPACE}/qwen2.5-7b_mg-verilog-add-remove-rule-p20"
 RESULTS_DIR="results/ablations/verilog_add_remove_rule_p20"
-mkdir -p "$RESULTS_DIR"
 
 uv run python src/eval_verilog.py \
     --adapter "$ADAPTER" \
@@ -20,9 +19,9 @@ uv run python src/eval_verilog.py \
 
 uv run python src/eval_verilog.py \
     --adapter "$ADAPTER" \
-    --grammar_file outputs/predicted_grammars/rag/verilog_test_k64.json \
     --problem_file data/verilog_eval/VerilogEval_Human.jsonl \
     --include_grammar \
+    --grammar_file outputs/predicted_grammars/rag/verilog_test_k64.json \
     --n_samples 5 \
     --temperature 0.8 \
     --output_path "$RESULTS_DIR/rag_grammar.json"
