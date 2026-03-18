@@ -105,10 +105,16 @@ def evaluate(
         print(f"Using predicted grammars from {grammar_file}")
         with open(grammar_file) as f:
             grammar_data = json.load(f)["data"]
+        empty_grammar_task_ids = set()
         for entry in grammar_data:
             key = entry.get("task_id") or entry.get("query")
-            grammar_map[key] = extract_grammar_from_output(entry["minimal_grammar"])
-        missing = [tid for tid in problems if tid not in grammar_map]
+            if entry["minimal_grammar"] is None:
+                empty_grammar_task_ids.add(key)
+            else:
+                grammar_map[key] = extract_grammar_from_output(entry["minimal_grammar"])
+        if empty_grammar_task_ids:
+            print(f"WARNING: Skipping {len(empty_grammar_task_ids)} tasks with missing grammar predictions")
+        missing = [tid for tid in problems if tid not in grammar_map and tid not in empty_grammar_task_ids]
         if missing:
             raise ValueError(
                 f"Grammar file is missing {len(missing)} task_ids: "
@@ -129,7 +135,7 @@ def evaluate(
             grammar_map[task_id] = grammar
         print(f"  Extracted {len(grammar_map)}/{len(problems)} grammars")
 
-    task_ids = list(problems.keys())
+    task_ids = [tid for tid in problems if tid not in empty_grammar_task_ids] if include_grammar and grammar_file else list(problems.keys())
     formatted_prompts = []
 
     for task_id in task_ids:

@@ -53,11 +53,18 @@ def evaluate(
         assert len(grammar_data) == len(examples), (
             f"Grammar file has {len(grammar_data)} entries but test data has {len(examples)}"
         )
-        for ex, gex in zip(examples, grammar_data):
+        skip_indices = set()
+        for i, (ex, gex) in enumerate(zip(examples, grammar_data)):
             assert ex["query"] == gex["query"], (
                 f"Query mismatch: {ex['query']!r} vs {gex['query']!r}"
             )
-            ex["minimal_grammar"] = extract_grammar_from_output(gex["minimal_grammar"])
+            if gex["minimal_grammar"] is None:
+                skip_indices.add(i)
+            else:
+                ex["minimal_grammar"] = extract_grammar_from_output(gex["minimal_grammar"])
+        if skip_indices:
+            print(f"WARNING: Skipping {len(skip_indices)} examples with missing grammar predictions")
+            examples = [ex for i, ex in enumerate(examples) if i not in skip_indices]
     else:
         print("Using gold grammars from test data")
 

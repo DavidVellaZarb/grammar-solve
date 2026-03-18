@@ -149,7 +149,7 @@ def _write_from_cache(
         if key in cache:
             results.append({**ex, "minimal_grammar": cache[key]})
         else:
-            results.append(ex)
+            results.append({**ex, "minimal_grammar": None})
             n_missing += 1
     if n_missing:
         print(f"Warning: {n_missing} examples missing from cache")

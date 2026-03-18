@@ -31,9 +31,14 @@ def evaluate(
     number_correct = 0
     details = []
 
+    n_skipped = 0
     for i, (pred_ex, gold_ex, gen_ex) in enumerate(
         zip(predicted_data, gold_data, generic_data)
     ):
+        if pred_ex["minimal_grammar"] is None:
+            n_skipped += 1
+            continue
+
         generic_grammar = gen_ex["minimal_grammar"]
         if not has_generic_terminals(generic_grammar):
             continue
@@ -82,6 +87,8 @@ def evaluate(
             }
         )
 
+    if n_skipped:
+        print(f"WARNING: Skipped {n_skipped} examples with missing grammar predictions")
     overall_acc = correct / total if total else 0
     string_acc = string_correct / string_total if string_total else 0
     number_acc = number_correct / number_total if number_total else 0

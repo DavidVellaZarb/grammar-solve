@@ -54,10 +54,15 @@ def evaluate(
     both_added_totals = []
     both_missing_totals = []
 
+    n_skipped = 0
     for pred_ex, gold_ex in zip(predicted_data, gold_data):
         assert pred_ex["query"] == gold_ex["query"], (
             f"Query mismatch: {pred_ex['query']!r} vs {gold_ex['query']!r}"
         )
+
+        if pred_ex["minimal_grammar"] is None:
+            n_skipped += 1
+            continue
 
         result = compare_grammars(
             extract_grammar_from_output(pred_ex["minimal_grammar"]),
@@ -91,7 +96,9 @@ def evaluate(
             both_added_totals.append(len(result["added_rules"]))
             both_missing_totals.append(len(result["missing_rules"]))
 
-    total = len(predicted_data)
+    if n_skipped:
+        print(f"WARNING: Skipped {n_skipped} examples with missing grammar predictions")
+    total = len(predicted_data) - n_skipped
     metrics = {
         "total": total,
         "exact_match": exact_match_count / total,
