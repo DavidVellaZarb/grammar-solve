@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 from lark import Lark, Tree
@@ -23,7 +24,7 @@ DOT_COMMAND_RULES = {
     "temp_cmd", "nodeset_cmd", "save_cmd", "tf_cmd", "ends_cmd", "node_cmd",
 }
 
-MULTILINE_RULES = {"subckt_body", "control_body_lines"}
+STATEMENT_RULES = COMPONENT_RULES | DOT_COMMAND_RULES | {"fallback_line"}
 
 
 def _collect_rule_names(tree) -> set[str]:
@@ -35,18 +36,41 @@ def _collect_rule_names(tree) -> set[str]:
     return names
 
 
+def _escape_lark_literals(alt: str) -> str:
+    def _escape(m: re.Match) -> str:
+        return '"' + m.group(0)[1:-1].replace("\\", "\\\\") + '"'
+    return re.sub(r'"[^"]*"', _escape, alt)
+
+
 def minimal_grammar_to_lark(minimal_grammar_text: str) -> str:
     min_rules = parse_minimal_grammar(minimal_grammar_text)
-    top_level = [r for r in min_rules if r in COMPONENT_RULES | DOT_COMMAND_RULES]
+
+    # Remove empty rules and strip their references from other rules
+    while True:
+        empty = {name for name, alts in min_rules.items()
+                 if not alts or all(not a.strip() for a in alts)}
+        if not empty:
+            break
+        for name in list(min_rules):
+            if name in empty:
+                del min_rules[name]
+                continue
+            new_alts = []
+            for alt in min_rules[name]:
+                parts = re.findall(r'"[^"]*"|\S+', alt)
+                filtered = [p for p in parts if p not in empty]
+                if filtered:
+                    new_alts.append(" ".join(filtered))
+            min_rules[name] = new_alts
+
+    top_level = [r for r in min_rules if r in STATEMENT_RULES]
 
     lines = ["start: (statement NEWLINE)*"]
-    stmt_alts = list(top_level)
-    stmt_alts.append("_fallback")
-    lines.append(f'?statement: {" | ".join(stmt_alts)}')
+    if top_level:
+        lines.append(f'?statement: {" | ".join(top_level)}')
     for name, alts in min_rules.items():
-        lines.append(f'{name}: {" | ".join(alts)}')
-    lines.append("_fallback: FALLBACK")
-    lines.append(r"FALLBACK.-1: /[^\n]+/")
+        escaped = [_escape_lark_literals(a) for a in alts]
+        lines.append(f'{name}: {" | ".join(escaped)}')
     lines.append(r"NEWLINE: /\n/")
     lines.append(r"%ignore /[ \t]+/")
     return "\n".join(lines)
@@ -73,21 +97,15 @@ def all_data():
 
 def test_parse_program_with_minimal_grammar(all_data):
     failures = []
-    skipped = 0
     for i, entry in enumerate(all_data):
-        grammar_text = entry["minimal_grammar"]
-        if any(m in grammar_text for m in MULTILINE_RULES):
-            skipped += 1
-            continue
-
         body = extract_body(entry["program"])
         if not body.strip():
             continue
 
         try:
-            min_rules = parse_minimal_grammar(grammar_text)
-            top_level = {r for r in min_rules if r in COMPONENT_RULES | DOT_COMMAND_RULES}
-            lark_grammar = minimal_grammar_to_lark(grammar_text)
+            min_rules = parse_minimal_grammar(entry["minimal_grammar"])
+            top_level = {r for r in min_rules if r in STATEMENT_RULES}
+            lark_grammar = minimal_grammar_to_lark(entry["minimal_grammar"])
             parser = Lark(lark_grammar, start="start", parser="earley")
             tree = parser.parse(body)
             used = _collect_rule_names(tree) & top_level
@@ -98,8 +116,7 @@ def test_parse_program_with_minimal_grammar(all_data):
             failures.append(f"[{i}] {str(e)[:200]}")
 
     assert not failures, (
-        f"{len(failures)} failures (skipped {skipped} multiline):\n"
-        + "\n".join(failures[:20])
+        f"{len(failures)} failures:\n" + "\n".join(failures[:20])
     )
 
 

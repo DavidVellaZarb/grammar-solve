@@ -153,6 +153,12 @@ def _reconstruct_alt(children: list, generic_terminals: frozenset[str] | None = 
                     parts.append('"' + joined + '"')
                     token_buf = []
                 parts.append(child.type)
+            elif position_aware_spacing and child.type == "NEWLINE":
+                if token_buf:
+                    joined = _join_token_buf(token_buf)
+                    parts.append('"' + joined + '"')
+                    token_buf = []
+                parts.append("NEWLINE")
             else:
                 token_buf.append(child if position_aware_spacing else str(child))
 

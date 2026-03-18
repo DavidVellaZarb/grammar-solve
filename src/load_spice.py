@@ -10,8 +10,7 @@ from tqdm import tqdm
 from grammar_parser import _build_parser, _detect_repetition_rules, _walk_tree
 from grammar_utils import SPICE_GENERIC_TERMINALS
 
-SKIP_RULES = {"netlist", "netlist_body", "title_line", "end_line", "comment_line",
-              "subckt_body", "fallback_line"}
+SKIP_RULES = {"netlist", "netlist_body", "title_line", "end_line", "comment_line"}
 
 GRAMMAR_PATH = "grammars/spice.lark"
 
