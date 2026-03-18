@@ -106,7 +106,8 @@ def _extract_grammar(
 
     rules: dict[str, list[str]] = {}
     _walk_tree(tree, rules, generic_terminals=generic_terminals,
-               repetition_rules=rep_rules, element_types=element_types)
+               repetition_rules=rep_rules, element_types=element_types,
+               position_aware_spacing=True)
 
     if element_types:
         for elem_name, types in element_types.items():

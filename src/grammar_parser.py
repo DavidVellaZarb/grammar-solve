@@ -117,27 +117,48 @@ def _fix_ambiguity(tree: Tree) -> Tree:
     return tree
 
 
-def _reconstruct_alt(children: list, generic_terminals: frozenset[str] | None = None) -> str:
+def _join_token_buf(tokens: list[Token]) -> str:
+    if not tokens:
+        return ""
+    parts = [str(tokens[0])]
+    for i in range(1, len(tokens)):
+        prev, cur = tokens[i - 1], tokens[i]
+        if (getattr(prev, "end_column", None) is not None
+                and getattr(cur, "column", None) is not None):
+            if getattr(prev, "end_line", 0) == getattr(cur, "line", 0):
+                if prev.end_column < cur.column:
+                    parts.append(" ")
+            else:
+                parts.append(" ")
+        parts.append(str(cur))
+    return "".join(parts)
+
+
+def _reconstruct_alt(children: list, generic_terminals: frozenset[str] | None = None,
+                     position_aware_spacing: bool = False) -> str:
     parts: list[str] = []
-    token_buf: list[str] = []
+    token_buf: list = []
 
     for child in children:
         if isinstance(child, Tree):
             if token_buf:
-                parts.append('"' + "".join(token_buf) + '"')
+                joined = _join_token_buf(token_buf) if position_aware_spacing else "".join(token_buf)
+                parts.append('"' + joined + '"')
                 token_buf = []
             parts.append(child.data)
         elif isinstance(child, Token):
             if generic_terminals and child.type in generic_terminals:
                 if token_buf:
-                    parts.append('"' + "".join(token_buf) + '"')
+                    joined = _join_token_buf(token_buf) if position_aware_spacing else "".join(token_buf)
+                    parts.append('"' + joined + '"')
                     token_buf = []
                 parts.append(child.type)
             else:
-                token_buf.append(str(child))
+                token_buf.append(child if position_aware_spacing else str(child))
 
     if token_buf:
-        parts.append('"' + "".join(token_buf) + '"')
+        joined = _join_token_buf(token_buf) if position_aware_spacing else "".join(token_buf)
+        parts.append('"' + joined + '"')
 
     return " ".join(parts)
 
@@ -192,6 +213,7 @@ def _walk_tree(
     generic_terminals: frozenset[str] | None = None,
     repetition_rules: dict[str, list[RepetitionInfo]] | None = None,
     element_types: dict[str, set[str]] | None = None,
+    position_aware_spacing: bool = False,
 ) -> None:
     if generic_terminals is None and generic:
         generic_terminals = GENERIC_TERMINALS
@@ -224,7 +246,8 @@ def _walk_tree(
                             element_types[element].add(child.data)
 
     if not normalized:
-        alt = _reconstruct_alt(tree.children, generic_terminals)
+        alt = _reconstruct_alt(tree.children, generic_terminals,
+                               position_aware_spacing=position_aware_spacing)
         rules.setdefault(rule_name, [])
         if alt not in rules[rule_name]:
             rules[rule_name].append(alt)
@@ -232,7 +255,8 @@ def _walk_tree(
     for child in tree.children:
         if isinstance(child, Tree):
             _walk_tree(child, rules, generic_terminals=generic_terminals,
-                       repetition_rules=repetition_rules, element_types=element_types)
+                       repetition_rules=repetition_rules, element_types=element_types,
+                       position_aware_spacing=position_aware_spacing)
 
 
 def extract_minimal_grammar(
