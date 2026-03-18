@@ -132,7 +132,7 @@ def evaluate(
     max_workers: int = 8,
 ):
     assert shutil.which("openscad") is not None, (
-        "openscad CLI not found on PATH. Install OpenSCAD and ensure 'openscad' is available."
+        "openscad CLI not found on PATH. Install with: apt-get update && apt-get install -y openscad"
     )
 
     peft_config = PeftConfig.from_pretrained(adapter)
