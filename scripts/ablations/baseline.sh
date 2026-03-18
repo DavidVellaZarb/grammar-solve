@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ADAPTER="${HF_NAMESPACE}/qwen2.5-7b_smcalflow"
-RESULTS_DIR="results/ablations_baseline"
+RESULTS_DIR="results/ablations/baseline"
 
 uv run python src/eval.py \
     --adapter "$ADAPTER" \
@@ -25,9 +25,9 @@ uv run python src/eval.py \
     --output_path "$RESULTS_DIR/test_add_remove_rule.json"
 
 uv run python src/plot.py \
-    --results_dir results \
-    --models '["ablations_baseline"]' \
-    --output_path results/ablations_baseline/ablation_baseline.png \
+    --results_dir results/ablations \
+    --models '["baseline"]' \
+    --output_path results/ablations/baseline/ablation_baseline.png \
     --title "Baseline Model" \
-    --model_labels '{"ablations_baseline": "Baseline"}' \
+    --model_labels '{"baseline": "Baseline"}' \
     --test_labels '{"test": "Original", "test_add_rule": "Added Rules", "test_remove_rule": "Removed Rules", "test_add_remove_rule": "Added+Removed Rules"}'

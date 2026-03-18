@@ -3,7 +3,7 @@ set -euo pipefail
 
 CONFIGS=("n1" "n2" "n3" "n4" "n2-4" "n3-5" "n4-6")
 TEST_SETS=("test" "test_add_remove_n1" "test_add_remove_n2" "test_add_remove_n3" "test_add_remove_n4" "test_add_remove_n2-4" "test_add_remove_n3-5" "test_add_remove_n4-6")
-RESULTS_BASE="results/ablations_add_remove"
+RESULTS_BASE="results/ablations/add_remove"
 
 TEST_LABELS='{"test": "Gold", "test_add_remove_n1": "n=1", "test_add_remove_n2": "n=2", "test_add_remove_n3": "n=3", "test_add_remove_n4": "n=4", "test_add_remove_n2-4": "n=[2,4)", "test_add_remove_n3-5": "n=[3,5)", "test_add_remove_n4-6": "n=[4,6)"}'
 
