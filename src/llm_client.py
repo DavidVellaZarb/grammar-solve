@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import json
@@ -5,8 +7,15 @@ import os
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    from anthropic import AsyncAnthropic
+    from anthropic.types import MessageParam
+    from openai import AsyncOpenAI
+    from openai.types.chat import ChatCompletionMessageParam
 
 load_dotenv()
 
@@ -94,17 +103,21 @@ class LLMClient:
 
         if self.api == Api.anthropic:
             from anthropic import AsyncAnthropic
-            self._client = AsyncAnthropic()
+            client = AsyncAnthropic()
         elif self.api == Api.openai:
             from openai import AsyncOpenAI
-            self._client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
+            client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
         elif self.api == Api.openrouter:
             from openai import AsyncOpenAI
-            self._client = AsyncOpenAI(
+            client = AsyncOpenAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=os.environ["OPENROUTER_API_KEY"],
             )
-        return self._client
+        else:
+            raise ValueError(f"Unsupported API: {self.api}")
+
+        self._client = client
+        return client
 
     async def call(
         self,
@@ -131,37 +144,48 @@ class LLMClient:
                 delay = RETRY_BASE_DELAY * (2 ** attempt)
                 print(f"\nRetry {attempt + 1}/{MAX_RETRIES} after error: {e}")
                 await asyncio.sleep(delay)
+        raise RuntimeError("Unreachable: all retries should either return or raise")
 
     async def _call_anthropic(self, messages: list[dict]) -> str:
-        client = self._get_client()
+        client = cast(AsyncAnthropic, self._get_client())
         system, user_messages = _extract_system_and_user_messages(messages)
-        kwargs = {}
+        typed_messages = cast(list[MessageParam], user_messages)
         if system:
-            kwargs["system"] = system
-        response = await client.messages.create(
-            model=self.model,
-            messages=user_messages,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            **kwargs,
-        )
+            response = await client.messages.create(
+                model=self.model,
+                messages=typed_messages,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+                system=system,
+            )
+        else:
+            response = await client.messages.create(
+                model=self.model,
+                messages=typed_messages,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
         text = getattr(response.content[0], "text", None)
         assert text is not None, f"Unexpected content block type: {type(response.content[0])}"
         return text.strip()
 
     async def _call_openai(self, messages: list[dict]) -> str:
-        client = self._get_client()
-        token_param = (
-            {"max_completion_tokens": self.max_tokens}
-            if self.api == Api.openai
-            else {"max_tokens": self.max_tokens}
-        )
-        response = await client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=self.temperature,
-            **token_param,
-        )
+        client = cast(AsyncOpenAI, self._get_client())
+        typed_messages = cast(list[ChatCompletionMessageParam], messages)
+        if self.api == Api.openai:
+            response = await client.chat.completions.create(
+                model=self.model,
+                messages=typed_messages,
+                temperature=self.temperature,
+                max_completion_tokens=self.max_tokens,
+            )
+        else:
+            response = await client.chat.completions.create(
+                model=self.model,
+                messages=typed_messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+            )
         return (response.choices[0].message.content or "").strip()
 
     def submit(
