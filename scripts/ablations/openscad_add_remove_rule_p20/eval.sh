@@ -18,8 +18,8 @@ uv run python src/eval_openscad.py \
 
 uv run python src/plot.py plot_multi_metrics \
     --result_files '["results/openscad/baseline/test.json", "'"$RESULTS_DIR"'/rag_grammar.json", "'"$RESULTS_DIR"'/gold_grammar.json"]' \
-    --metrics '["syntax_validity", "iou"]' \
+    --metrics '["iou", "syntax_validity", "bleu"]' \
     --labels '["Baseline", "RAG", "Gold Grammar"]' \
-    --metric_labels '{"syntax_validity": "Syntax Validity", "iou": "Volumetric IoU"}' \
+    --metric_labels '{"iou": "Volumetric IoU", "syntax_validity": "Syntax Validity", "bleu": "BLEU"}' \
     --output_path "$RESULTS_DIR/comparison.png" \
     --title "OpenSCAD — Ablated Model (add_remove p=20%)"

@@ -9,8 +9,8 @@ uv run python src/eval_openscad.py \
 
 uv run python src/plot.py plot_multi_metrics \
     --result_files '["results/openscad/baseline/test.json", "results/rag_openscad/test.json", "results/openscad/grammar/test.json"]' \
-    --metrics '["syntax_validity", "iou"]' \
+    --metrics '["iou", "syntax_validity", "bleu"]' \
     --labels '["Baseline", "RAG", "Gold Grammar"]' \
-    --metric_labels '{"syntax_validity": "Syntax Validity", "iou": "Volumetric IoU"}' \
+    --metric_labels '{"iou": "Volumetric IoU", "syntax_validity": "Syntax Validity", "bleu": "BLEU"}' \
     --output_path results/rag_openscad/comparison.png \
     --title "OpenSCAD — RAG Grammar Prediction"

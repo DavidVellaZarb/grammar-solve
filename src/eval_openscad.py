@@ -8,11 +8,10 @@ import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import fire
-import numpy as np
 import torch
 import trimesh
+from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 from peft import PeftConfig, PeftModel
-from scipy.spatial import KDTree
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -57,29 +56,14 @@ def compile_openscad(code: str, timeout: float = 30.0) -> trimesh.Trimesh | None
                 os.unlink(p)
 
 
-def _evaluate_single(gold_code, pred_code, compile_timeout, n_sample_points, voxel_pitch):
+def _evaluate_single(gold_code, pred_code, compile_timeout, voxel_pitch):
     gold_mesh = compile_openscad(gold_code, timeout=compile_timeout)
     pred_mesh = compile_openscad(pred_code, timeout=compile_timeout)
     valid = pred_mesh is not None
-    cd, iou = None, None
+    iou = None
     if gold_mesh is not None and pred_mesh is not None:
-        cd = compute_chamfer_distance(gold_mesh, pred_mesh, n_points=n_sample_points)
         iou = compute_iou(gold_mesh, pred_mesh, pitch=voxel_pitch)
-    return {"valid": valid, "chamfer_distance": cd, "iou": iou}
-
-
-def compute_chamfer_distance(mesh1: trimesh.Trimesh, mesh2: trimesh.Trimesh,
-                             n_points: int = 10000) -> float:
-    pts1 = mesh1.sample(n_points)
-    pts2 = mesh2.sample(n_points)
-
-    tree1 = KDTree(pts1)
-    tree2 = KDTree(pts2)
-
-    d1, _ = tree2.query(pts1)
-    d2, _ = tree1.query(pts2)
-
-    return float(np.mean(d1 ** 2) + np.mean(d2 ** 2))
+    return {"valid": valid, "iou": iou}
 
 
 def _normalize_mesh(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
@@ -126,7 +110,6 @@ def evaluate(
     include_grammar: bool = True,
     task: str = "program",
     compile_timeout: float = 30.0,
-    n_sample_points: int = 10000,
     voxel_pitch: float = 0.02,
     cache_dir: str | None = None,
     max_workers: int = 8,
@@ -211,11 +194,23 @@ def evaluate(
         predictions = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
         for ex, prompt, pred in zip(batch_examples, batch_prompts, predictions):
+            pred_code = extract_openscad_code(pred)
+            gold = ex["program"]
+            exact_match = gold in pred
+            gold_tokens = gold.split()
+            pred_tokens = pred_code.split()
+            bleu = sentence_bleu(
+                [gold_tokens],
+                pred_tokens,
+                smoothing_function=SmoothingFunction().method1,
+            )
             inference_results.append({
                 "prompt": prompt,
                 "prediction": pred,
-                "pred_code": extract_openscad_code(pred),
-                "gold": ex["program"],
+                "pred_code": pred_code,
+                "gold": gold,
+                "exact_match": exact_match,
+                "bleu": bleu,
             })
 
     del model
@@ -229,7 +224,7 @@ def evaluate(
             future = executor.submit(
                 _evaluate_single,
                 ir["gold"], ir["pred_code"],
-                compile_timeout, n_sample_points, voxel_pitch,
+                compile_timeout, voxel_pitch,
             )
             future_to_idx[future] = idx
 
@@ -245,30 +240,32 @@ def evaluate(
             "gold": ir["gold"],
             "prediction": ir["prediction"],
             "pred_code": ir["pred_code"],
+            "exact_match": ir["exact_match"],
+            "bleu": ir["bleu"],
             "valid": er["valid"],
-            "chamfer_distance": er["chamfer_distance"],
             "iou": er["iou"],
         })
 
     total = len(results)
+    exact_count = sum(1 for r in results if r["exact_match"])
     valid_count = sum(1 for r in results if r["valid"])
-    cds = [r["chamfer_distance"] for r in results if r["chamfer_distance"] is not None]
+    bleus = [r["bleu"] for r in results]
     ious = [r["iou"] for r in results if r["iou"] is not None]
 
     metrics = {
+        "exact_match": exact_count / total if total > 0 else 0.0,
         "syntax_validity": valid_count / total if total > 0 else 0.0,
-        "chamfer_distance": sum(cds) / len(cds) if cds else None,
+        "bleu": sum(bleus) / len(bleus) if bleus else 0.0,
         "iou": sum(ious) / len(ious) if ious else None,
-        "geometry_evaluated": len(cds),
+        "geometry_evaluated": len(ious),
+        "correct": exact_count,
         "total": total,
     }
 
     print(f"\n--- Metrics ---")
+    print(f"Exact match:        {metrics['exact_match']:.4f} ({exact_count}/{total})")
     print(f"Syntax validity:    {metrics['syntax_validity']:.4f} ({valid_count}/{total})")
-    if metrics["chamfer_distance"] is not None:
-        print(f"Chamfer Distance:   {metrics['chamfer_distance']:.6f} (n={len(cds)})")
-    else:
-        print(f"Chamfer Distance:   N/A (no valid geometry pairs)")
+    print(f"BLEU:               {metrics['bleu']:.4f}")
     if metrics["iou"] is not None:
         print(f"Volumetric IoU:     {metrics['iou']:.4f} (n={len(ious)})")
     else:
