@@ -10,6 +10,7 @@ uv run python src/eval_verilog.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_mg-verilog" \
     --grammar_file outputs/predicted_grammars/rag/verilog_test_k64.json \
     --problem_file data/verilog_eval/VerilogEval_Human.jsonl \
+    --include_grammar \
     --n_samples 5 \
     --temperature 0.8 \
     --output_path results/rag_verilog/test.json

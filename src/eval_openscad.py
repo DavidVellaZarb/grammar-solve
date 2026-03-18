@@ -18,6 +18,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from data import format_prompt_messages, load_raw_data
 from eval_utils import save_results
+from grammar_utils import extract_grammar_from_output
 
 
 def extract_openscad_code(prediction: str) -> str:
@@ -165,7 +166,7 @@ def evaluate(
             assert ex["query"] == gex["query"], (
                 f"Query mismatch: {ex['query']!r} vs {gex['query']!r}"
             )
-            ex["minimal_grammar"] = gex["minimal_grammar"]
+            ex["minimal_grammar"] = extract_grammar_from_output(gex["minimal_grammar"])
     else:
         print("Using gold grammars from test data")
 

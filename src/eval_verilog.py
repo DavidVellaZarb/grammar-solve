@@ -12,7 +12,7 @@ from verilog_eval.evaluation import evaluate_functional_correctness
 
 from data import format_prompt_messages
 from grammar_parser import extract_minimal_grammar
-from grammar_utils import VERILOG_GENERIC_TERMINALS
+from grammar_utils import VERILOG_GENERIC_TERMINALS, extract_grammar_from_output
 
 VERILOG_GRAMMAR_PATH = "grammars/verilog.lark"
 VERILOG_SKIP_RULES = {
@@ -107,7 +107,7 @@ def evaluate(
             grammar_data = json.load(f)["data"]
         for entry in grammar_data:
             key = entry.get("task_id") or entry.get("query")
-            grammar_map[key] = entry["minimal_grammar"]
+            grammar_map[key] = extract_grammar_from_output(entry["minimal_grammar"])
         missing = [tid for tid in problems if tid not in grammar_map]
         if missing:
             raise ValueError(
