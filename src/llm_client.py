@@ -428,7 +428,8 @@ def _collect_anthropic(
             if ck is None:
                 continue
             if result.result.type == "succeeded":
-                text = getattr(result.result.message.content[0], "text", None)
+                content = result.result.message.content
+                text = getattr(content[0], "text", None) if content else None
                 if text is not None:
                     cache[ck] = text.strip()
                     n_collected += 1
