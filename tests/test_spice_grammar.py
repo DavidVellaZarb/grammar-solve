@@ -1,30 +1,65 @@
 import json
-import re
 
 import pytest
+from lark import Lark, Tree
 
 from grammar_parser import _build_parser, _detect_repetition_rules, _walk_tree
-from grammar_utils import SPICE_GENERIC_TERMINALS
+from grammar_utils import parse_minimal_grammar
 from load_spice import GRAMMAR_PATH, SKIP_RULES
 
 TRAIN_PATH = "data/spice/train.json"
 TEST_PATH = "data/spice/test.json"
 
+COMPONENT_RULES = {
+    "resistor", "capacitor", "inductor", "voltage_source", "current_source",
+    "diode", "mosfet", "bjt", "jfet", "subcircuit_call", "coupled_inductor",
+    "vccs", "vcvs", "cccs", "ccvs", "behavioral_source", "switch",
+}
 
-def parse_grammar(text: str) -> dict[str, set[str]]:
-    rules: dict[str, set[str]] = {}
-    for line in text.strip().split("\n"):
-        line = line.strip()
-        if not line:
-            continue
-        name, _, rest = line.partition(" ::= ")
-        alts = rest.split(" | ")
-        rules[name] = set(alts)
-    return rules
+DOT_COMMAND_RULES = {
+    "model_def", "subckt_def", "tran_cmd", "dc_cmd", "ac_cmd", "op_cmd",
+    "param_cmd", "lib_cmd", "include_cmd", "options_cmd", "ic_cmd",
+    "control_block", "print_cmd", "plot_cmd", "measure_cmd", "global_cmd",
+    "temp_cmd", "nodeset_cmd", "save_cmd", "tf_cmd", "ends_cmd", "node_cmd",
+}
+
+MULTILINE_RULES = {"subckt_body", "control_body_lines"}
 
 
-def extract_literals(grammar_text: str) -> list[str]:
-    return re.findall(r'"([^"]+)"', grammar_text)
+def _collect_rule_names(tree) -> set[str]:
+    names = set()
+    if isinstance(tree, Tree):
+        names.add(tree.data)
+        for child in tree.children:
+            names.update(_collect_rule_names(child))
+    return names
+
+
+def minimal_grammar_to_lark(minimal_grammar_text: str) -> str:
+    min_rules = parse_minimal_grammar(minimal_grammar_text)
+    top_level = [r for r in min_rules if r in COMPONENT_RULES | DOT_COMMAND_RULES]
+
+    lines = ["start: (statement NEWLINE)*"]
+    stmt_alts = list(top_level)
+    stmt_alts.append("_fallback")
+    lines.append(f'?statement: {" | ".join(stmt_alts)}')
+    for name, alts in min_rules.items():
+        lines.append(f'{name}: {" | ".join(alts)}')
+    lines.append("_fallback: FALLBACK")
+    lines.append(r"FALLBACK.-1: /[^\n]+/")
+    lines.append(r"NEWLINE: /\n/")
+    lines.append(r"%ignore /[ \t]+/")
+    return "\n".join(lines)
+
+
+def extract_body(program: str) -> str:
+    lines = program.split("\n")
+    body = []
+    for line in lines[1:]:
+        if line.strip().lower() == ".end":
+            break
+        body.append(line)
+    return "\n".join(body) + "\n" if body else ""
 
 
 @pytest.fixture(scope="module")
@@ -36,17 +71,36 @@ def all_data():
     return entries
 
 
-def test_grammar_literals_in_program(all_data):
+def test_parse_program_with_minimal_grammar(all_data):
     failures = []
+    skipped = 0
     for i, entry in enumerate(all_data):
-        program = entry["program"]
-        literals = extract_literals(entry["minimal_grammar"])
-        for lit in literals:
-            if lit not in program:
-                failures.append(f"[{i}] literal {lit!r} not in program: {program[:100]}")
-                break
+        grammar_text = entry["minimal_grammar"]
+        if any(m in grammar_text for m in MULTILINE_RULES):
+            skipped += 1
+            continue
 
-    assert not failures, f"{len(failures)} failures:\n" + "\n".join(failures[:20])
+        body = extract_body(entry["program"])
+        if not body.strip():
+            continue
+
+        try:
+            min_rules = parse_minimal_grammar(grammar_text)
+            top_level = {r for r in min_rules if r in COMPONENT_RULES | DOT_COMMAND_RULES}
+            lark_grammar = minimal_grammar_to_lark(grammar_text)
+            parser = Lark(lark_grammar, start="start", parser="earley")
+            tree = parser.parse(body)
+            used = _collect_rule_names(tree) & top_level
+            missing = top_level - used
+            if missing:
+                failures.append(f"[{i}] rules not matched: {missing}")
+        except Exception as e:
+            failures.append(f"[{i}] {str(e)[:200]}")
+
+    assert not failures, (
+        f"{len(failures)} failures (skipped {skipped} multiline):\n"
+        + "\n".join(failures[:20])
+    )
 
 
 def test_re_extraction_matches_stored(all_data):
@@ -75,8 +129,8 @@ def test_re_extraction_matches_stored(all_data):
         lines = [f"{name} ::= {' | '.join(alts)}" for name, alts in rules.items()]
         regenerated = "\n".join(lines)
 
-        gen_rules = parse_grammar(regenerated)
-        exp_rules = parse_grammar(entry["minimal_grammar"])
+        gen_rules = _parse_grammar_to_set(regenerated)
+        exp_rules = _parse_grammar_to_set(entry["minimal_grammar"])
 
         if gen_rules != exp_rules:
             diff_lines = []
@@ -91,3 +145,15 @@ def test_re_extraction_matches_stored(all_data):
             failures.append(f"[{i}]\n" + "\n".join(diff_lines))
 
     assert not failures, f"{len(failures)} failures:\n" + "\n".join(failures[:10])
+
+
+def _parse_grammar_to_set(text: str) -> dict[str, set[str]]:
+    rules: dict[str, set[str]] = {}
+    for line in text.strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        name, _, rest = line.partition(" ::= ")
+        alts = rest.split(" | ")
+        rules[name] = set(alts)
+    return rules
