@@ -8,11 +8,20 @@ from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 from data import load_raw_data, load_test_data
+from grammar_utils import parse_lark_grammar, reconstruct_minimal_grammar
 from knn import _find_knn, _load_or_compute_embeddings
 from llm_client import LLMClient, cache_key, find_latest_metadata, load_cache, save_cache
 from predict_utils import write_output
 
 load_dotenv()
+
+
+def _load_grammar_as_bnf(grammar_path: str) -> str:
+    with open(grammar_path) as f:
+        lark_text = f.read()
+    rules = parse_lark_grammar(lark_text)
+    return reconstruct_minimal_grammar(rules)
+
 
 SYSTEM_PROMPT_TEMPLATE = (
     "You are a grammar prediction assistant for semantic parsing. You are given:\n"
@@ -185,8 +194,7 @@ def predict(
             pass
 
         if meta_path is None:
-            with open(grammar_path) as f:
-                full_grammar = f.read()
+            full_grammar = _load_grammar_as_bnf(grammar_path)
             system_prompt = SYSTEM_PROMPT_TEMPLATE.format(full_grammar=full_grammar)
 
             train_data, test_data, knn_indices = _load_knn(
@@ -221,8 +229,7 @@ def predict(
                 sys.exit(1)
             time.sleep(poll_interval)
 
-        with open(grammar_path) as f:
-            full_grammar = f.read()
+        full_grammar = _load_grammar_as_bnf(grammar_path)
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(full_grammar=full_grammar)
 
         train_data, test_data, knn_indices = _load_knn(
@@ -236,8 +243,7 @@ def predict(
         )
         return
 
-    with open(grammar_path) as f:
-        full_grammar = f.read()
+    full_grammar = _load_grammar_as_bnf(grammar_path)
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(full_grammar=full_grammar)
 
     train_data, test_data, knn_indices = _load_knn(
@@ -286,8 +292,7 @@ def collect(
         cache=cache, cache_path=cache_path,
     )
 
-    with open(grammar_path) as f:
-        full_grammar = f.read()
+    full_grammar = _load_grammar_as_bnf(grammar_path)
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(full_grammar=full_grammar)
 
     train_data, test_data, knn_indices = _load_knn(
