@@ -20,7 +20,7 @@ RETRY_BASE_DELAY = 2
 
 SYSTEM_PROMPT = (
     "You are an expert grammar analyst. You are given a context-free grammar "
-    "for a calendar-domain semantic parsing language, along with a natural "
+    "for {domain_description}, along with a natural "
     "language query, its gold program, and the minimal grammar needed to "
     "parse that program.\n\n"
     "Your task: explain step-by-step WHY these specific grammar rules are "
@@ -37,11 +37,12 @@ SYSTEM_PROMPT = (
 def _build_messages(
     example: dict, system_prompt: str
 ) -> list[dict]:
-    user_content = (
-        f"Query: {example['query']}\n\n"
-        f"Gold program:\n{example['program']}\n\n"
-        f"Minimal grammar:\n{example['minimal_grammar']}"
-    )
+    parts = [f"Query: {example['query']}"]
+    if example.get("module_header"):
+        parts.append(f"Module header:\n{example['module_header']}")
+    parts.append(f"Gold program:\n{example['program']}")
+    parts.append(f"Minimal grammar:\n{example['minimal_grammar']}")
+    user_content = "\n\n".join(parts)
     return [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
@@ -85,11 +86,15 @@ def submit(
     model: str = "gpt-5.4",
     cache_path: str = "cache/cot_cache.json",
     api: str = "openai",
+    domain_description: str = "a calendar-domain semantic parsing language",
+    task_name: str | None = None,
 ):
     with open(grammar_path) as f:
         full_grammar = f.read()
 
-    system_prompt = SYSTEM_PROMPT.format(full_grammar=full_grammar)
+    system_prompt = SYSTEM_PROMPT.format(
+        domain_description=domain_description, full_grammar=full_grammar
+    )
     examples = load_raw_data(input_path)
     cache = load_cache(cache_path)
     print(f"Loaded {len(examples)} examples, cache has {len(cache)} entries")
@@ -101,14 +106,14 @@ def submit(
         messages = _build_messages(ex, system_prompt)
         requests.append((f"req-{i}", messages))
 
-    task_name = Path(input_path).stem
+    if task_name is None:
+        task_name = Path(input_path).stem
     meta_path = llm.submit(requests, cache, task_name)
     save_cache(cache, cache_path)
 
     if meta_path:
         print(f"\nBatch submitted. Use 'check' to monitor, 'collect' when done.")
 
-    # Store output_path and other context in metadata for collect
     if meta_path:
         with open(meta_path) as f:
             metadata = json.load(f)
@@ -116,6 +121,7 @@ def submit(
         metadata["output_path"] = output_path
         metadata["grammar_path"] = grammar_path
         metadata["cache_path"] = cache_path
+        metadata["domain_description"] = domain_description
         with open(meta_path, "w") as f:
             json.dump(metadata, f, indent=2)
 
@@ -132,11 +138,17 @@ def check(
 def collect(
     metadata_path: str | None = None,
     task_name: str | None = None,
+    force: bool = False,
 ):
     if metadata_path is None:
         metadata_path = find_latest_metadata(task_name)
     with open(metadata_path) as f:
         metadata = json.load(f)
+
+    output_path = metadata["output_path"]
+    if os.path.exists(output_path) and not force:
+        print(f"WARNING: {output_path} already exists. Use --force to overwrite. Skipping.")
+        return
 
     cache_path = metadata["cache_path"]
     cache = load_cache(cache_path)
@@ -148,7 +160,12 @@ def collect(
 
     with open(metadata["grammar_path"]) as f:
         full_grammar = f.read()
-    system_prompt = SYSTEM_PROMPT.format(full_grammar=full_grammar)
+    domain_description = metadata.get(
+        "domain_description", "a calendar-domain semantic parsing language"
+    )
+    system_prompt = SYSTEM_PROMPT.format(
+        domain_description=domain_description, full_grammar=full_grammar
+    )
     examples = load_raw_data(metadata["input_path"])
     model = metadata["model"]
 
@@ -165,7 +182,6 @@ def collect(
             results.append(ex)
             n_missing += 1
 
-    output_path = metadata["output_path"]
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     with open(output_path, "w") as f:
         json.dump({"data": results}, f, indent=2)
@@ -185,13 +201,22 @@ def run(
     mode: str = "batch",
     poll_interval: int = 60,
     api: str = "openai",
+    domain_description: str = "a calendar-domain semantic parsing language",
+    task_name: str | None = None,
+    force: bool = False,
 ):
     llm = LLMClient(api=api, model=model)
 
     if mode == "async":
+        if os.path.exists(output_path) and not force:
+            print(f"WARNING: {output_path} already exists. Use --force to overwrite. Skipping.")
+            return
+
         with open(grammar_path) as f:
             full_grammar = f.read()
-        system_prompt = SYSTEM_PROMPT.format(full_grammar=full_grammar)
+        system_prompt = SYSTEM_PROMPT.format(
+            domain_description=domain_description, full_grammar=full_grammar
+        )
         examples = load_raw_data(input_path)
         cache = load_cache(cache_path)
         print(f"Loaded {len(examples)} examples, cache has {len(cache)} entries")
@@ -209,14 +234,15 @@ def run(
         print(f"Wrote {len(results)} examples with CoT to {output_path}")
         return
 
+    resolved_task_name = task_name if task_name is not None else Path(input_path).stem
+
     metadata_path = None
     try:
-        task_name = Path(input_path).stem
-        metadata_path = find_latest_metadata(task_name)
+        metadata_path = find_latest_metadata(resolved_task_name)
         status = LLMClient.check(metadata_path=metadata_path)
         if status == "completed":
             print("Batch already completed, collecting results...")
-            collect(metadata_path=metadata_path)
+            collect(metadata_path=metadata_path, force=force)
             return
         if status == "failed":
             metadata_path = None
@@ -233,9 +259,10 @@ def run(
             model=model,
             cache_path=cache_path,
             api=api,
+            domain_description=domain_description,
+            task_name=task_name,
         )
-        task_name = Path(input_path).stem
-        metadata_path = find_latest_metadata(task_name)
+        metadata_path = find_latest_metadata(resolved_task_name)
 
     print(f"\nPolling every {poll_interval}s...")
     while True:
@@ -247,7 +274,7 @@ def run(
             sys.exit(1)
         time.sleep(poll_interval)
 
-    collect(metadata_path=metadata_path)
+    collect(metadata_path=metadata_path, force=force)
 
 
 if __name__ == "__main__":
