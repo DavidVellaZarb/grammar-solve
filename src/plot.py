@@ -353,6 +353,85 @@ def plot_bar_chart(
     print(f"Saved plot to {output_path}")
 
 
+def plot_stacked_gain(
+    base_files: list[str],
+    gain_files: list[str],
+    labels: list[str] | None = None,
+    metric: str = "accuracy",
+    base_legend: str = "Base",
+    gain_legend: str = "+ Constrained Decoding",
+    output_path: str = "results/stacked_gain.png",
+    title: str | None = None,
+    ylabel: str = "Accuracy",
+):
+    """Plot a stacked bar chart showing base values and gains on top.
+
+    Args:
+        base_files: Paths to result JSON files for base values.
+        gain_files: Paths to result JSON files for values with the gain applied.
+        labels: Display labels for each bar group.
+        metric: Key to extract from each file, supports dot notation.
+        base_legend: Legend label for the base segment.
+        gain_legend: Legend label for the gain segment.
+        output_path: Where to save the figure.
+        title: Chart title.
+        ylabel: Y-axis label.
+    """
+    labels = labels or [Path(f).stem for f in base_files]
+
+    base_values = []
+    for path in base_files:
+        with open(path) as f:
+            base_values.append(_resolve_metric(json.load(f), metric))
+
+    gain_values = []
+    for path, base_val in zip(gain_files, base_values):
+        with open(path) as f:
+            total = _resolve_metric(json.load(f), metric)
+        gain_values.append(total - base_val)
+
+    fig, ax = plt.subplots(figsize=(max(5, len(base_files) * 2), 5))
+    x = range(len(base_values))
+    width = 0.45
+
+    bars_base = ax.bar(x, base_values, width, label=base_legend, color="#1f77b4")
+    bars_gain = ax.bar(
+        x, gain_values, width, bottom=base_values, label=gain_legend, color="#ff7f0e"
+    )
+
+    for i, (bar_b, bar_g, bv, gv) in enumerate(
+        zip(bars_base, bars_gain, base_values, gain_values)
+    ):
+        cx = bar_b.get_x() + bar_b.get_width() / 2
+        total = bv + gv
+        ax.text(cx, total + 0.01, f"{total:.2%}", ha="center", va="bottom", fontsize=9)
+        if gv > 0.001:
+            ax.annotate(
+                f"+{gv:.2%}",
+                xy=(cx + width / 2, bv + gv / 2),
+                xytext=(cx + width / 2 + 0.15, bv + gv / 2),
+                fontsize=8,
+                ha="left",
+                va="center",
+                arrowprops=dict(arrowstyle="-", color="gray", lw=0.8),
+            )
+
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(labels)
+    ax.set_ylabel(ylabel)
+    ax.set_ylim(0, 1.15)
+    ax.legend()
+
+    if title:
+        ax.set_title(title)
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Saved plot to {output_path}")
+
+
 def plot_lines(
     result_files: list[str],
     x_values: list[float],
@@ -413,5 +492,6 @@ if __name__ == "__main__":
         "plot_pass_at_k": plot_pass_at_k,
         "plot_multi_metrics": plot_multi_metrics,
         "plot_bar_chart": plot_bar_chart,
+        "plot_stacked_gain": plot_stacked_gain,
         "plot_lines": plot_lines,
     })
