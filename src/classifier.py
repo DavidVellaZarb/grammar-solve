@@ -240,7 +240,7 @@ def train(
         num_train_epochs=num_train_epochs,
         learning_rate=learning_rate,
         per_device_train_batch_size=per_device_train_batch_size,
-        per_device_eval_batch_size=64,
+        per_device_eval_batch_size=32,
         warmup_ratio=0.1,
         weight_decay=0.01,
         eval_strategy="epoch",
@@ -291,7 +291,7 @@ def predict(
     output_path: str = "outputs/predicted_grammars/classifier_generic.json",
     classifier: str = "deberta-v3-base_smcalflow-classifier",
     threshold: float = 0.5,
-    batch_size: int = 64,
+    batch_size: int = 32,
     max_seq_length: int = 128,
 ) -> None:
     if "/" not in classifier:

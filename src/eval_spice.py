@@ -227,7 +227,7 @@ def evaluate(
     adapter: str,
     test_path: str = "data/spice/test.json",
     model_name: str | None = None,
-    batch_size: int = 64,
+    batch_size: int = 32,
     max_new_tokens: int = 2048,
     output_path: str | None = None,
     attn_implementation: str = "flash_attention_2",
