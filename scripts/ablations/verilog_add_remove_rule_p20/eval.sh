@@ -30,4 +30,4 @@ uv run python src/plot.py plot_pass_at_k \
     --result_files '["results/verilog/baseline.json", "'"$RESULTS_DIR"'/rag_grammar.json", "'"$RESULTS_DIR"'/gold_grammar.json"]' \
     --labels '["Baseline", "RAG", "Gold Grammar"]' \
     --output_path "$RESULTS_DIR/pass_at_k.png" \
-    --title "Verilog — Ablated Model (add_remove p=20%)"
+    --title "Verilog — Noisy Training Grammars (add_remove=20%)"

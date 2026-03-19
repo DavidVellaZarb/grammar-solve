@@ -22,4 +22,4 @@ uv run python src/plot.py plot_multi_metrics \
     --labels '["Baseline", "RAG", "Gold Grammar"]' \
     --metric_labels '{"ged_similarity": "GED Similarity", "syntax_validity": "Syntax Validity", "exact_match": "Exact Match", "bleu": "BLEU", "component_f1": "Component F1"}' \
     --output_path "$RESULTS_DIR/comparison.png" \
-    --title "SPICE — Ablated Model (add_remove p=20%)"
+    --title "SPICE — Noisy Training Grammars (add_remove=20%)"

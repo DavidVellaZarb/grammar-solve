@@ -22,4 +22,4 @@ uv run python src/plot.py plot_multi_metrics \
     --labels '["Baseline", "RAG", "Gold Grammar"]' \
     --metric_labels '{"canonical_exact_match": "Canonical Exact Match", "validity": "Validity", "fingerprint_similarity": "Fingerprint Similarity", "bleu": "BLEU"}' \
     --output_path "$RESULTS_DIR/comparison.png" \
-    --title "SMILES — Ablated Model (add_remove p=20%)"
+    --title "SMILES — Noisy Training Grammars (add_remove=20%)"

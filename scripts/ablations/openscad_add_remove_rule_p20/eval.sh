@@ -22,4 +22,4 @@ uv run python src/plot.py plot_multi_metrics \
     --labels '["Baseline", "RAG", "Gold Grammar"]' \
     --metric_labels '{"iou": "Volumetric IoU", "syntax_validity": "Syntax Validity", "bleu": "BLEU"}' \
     --output_path "$RESULTS_DIR/comparison.png" \
-    --title "OpenSCAD — Ablated Model (add_remove p=20%)"
+    --title "OpenSCAD — Noisy Training Grammars (add_remove=20%)"
