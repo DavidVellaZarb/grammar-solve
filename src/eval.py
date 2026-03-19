@@ -14,6 +14,44 @@ from grammar_utils import extract_grammar_from_output
 GRAMMAR_PROGRAM_SEPARATOR = "\nProgram:\n"
 
 
+def _bytes_to_unicode():
+    bs = (
+        list(range(ord("!"), ord("~") + 1))
+        + list(range(ord("\xa1"), ord("\xac") + 1))
+        + list(range(ord("\xae"), ord("\xff") + 1))
+    )
+    cs = bs[:]
+    n = 0
+    for b in range(256):
+        if b not in bs:
+            bs.append(b)
+            cs.append(256 + n)
+            n += 1
+    return dict(zip(bs, [chr(c) for c in cs]))
+
+
+def _patch_transformers_cfg_compat():
+    import transformers_cfg.tokenization.middle.ByteProxyMapping as bpm_mod
+
+    def patched_init(self, tokenizer):
+        if tokenizer.is_fast:
+            tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer.name_or_path, use_fast=False
+            )
+        self.tokenizer = tokenizer
+        if not hasattr(tokenizer, "byte_encoder"):
+            byte_encoder = _bytes_to_unicode()
+            tokenizer.byte_encoder = byte_encoder
+            tokenizer.byte_decoder = {v: k for k, v in byte_encoder.items()}
+        self.byte2proxychar = tokenizer.byte_encoder
+        self.proxychar2byte = tokenizer.byte_decoder
+        self.cdp2byte = {ord(c): b for c, b in self.proxychar2byte.items()}
+        self.byte2cdp = {v: k for k, v in self.cdp2byte.items()}
+        self.PROXY_CDP_SET = set(self.cdp2byte.keys())
+
+    bpm_mod.ByteProxyMapping.__init__ = patched_init
+
+
 def evaluate(
     adapter: str,
     test_path: str = "data/smcalflow/test.json",
@@ -25,6 +63,8 @@ def evaluate(
     grammar_file: str | None = None,
     include_grammar: bool = True,
     task: str = "program",
+    constrained: bool = False,
+    grammar_path: str = "grammars/smcalflow.lark",
 ):
     peft_config = PeftConfig.from_pretrained(adapter)
     base_model_name = model_name or peft_config.base_model_name_or_path
@@ -43,6 +83,21 @@ def evaluate(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
+
+    gbnf = None
+    if constrained:
+        if not test_path.startswith("data/smcalflow/"):
+            raise ValueError(
+                "Constrained decoding is currently only supported for SMCalFlow. "
+                f"Got test_path={test_path!r}"
+            )
+        from lark_to_gbnf import lark_to_gbnf
+        from transformers_cfg.grammar_utils import IncrementalGrammarConstraint
+        from transformers_cfg.generation.logits_process import GrammarConstrainedLogitsProcessor
+
+        _patch_transformers_cfg_compat()
+        gbnf = lark_to_gbnf(grammar_path, start="call")
+        print(f"Constrained decoding enabled with grammar from {grammar_path}")
 
     examples = load_raw_data(test_path)
 
@@ -87,12 +142,18 @@ def evaluate(
             batch_prompts, return_tensors="pt", padding=True, truncation=True
         ).to(model.device)
 
+        generate_kwargs = dict(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+        )
+        if constrained:
+            constraint = IncrementalGrammarConstraint(gbnf, "root", tokenizer)
+            processor = GrammarConstrainedLogitsProcessor(constraint)
+            generate_kwargs["logits_processor"] = [processor]
+
         with torch.no_grad():
-            output_ids = model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=False,
-            )
+            output_ids = model.generate(**generate_kwargs)
 
         prompt_len = inputs["input_ids"].shape[1]
         generated_ids = output_ids[:, prompt_len:]

@@ -727,6 +727,7 @@ dependencies = [
     { name = "torch" },
     { name = "tqdm" },
     { name = "transformers" },
+    { name = "transformers-cfg" },
     { name = "trimesh" },
     { name = "trl" },
     { name = "wandb" },
@@ -756,6 +757,7 @@ requires-dist = [
     { name = "torch", specifier = ">=2.4" },
     { name = "tqdm", specifier = ">=4.66" },
     { name = "transformers", specifier = ">=4.46" },
+    { name = "transformers-cfg", specifier = ">=0.2" },
     { name = "trimesh", specifier = ">=4.11.3" },
     { name = "trl", specifier = ">=0.12" },
     { name = "wandb", specifier = ">=0.18" },
@@ -2908,6 +2910,25 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/bd/7e/8a0c57d562015e5b16c97c1f0b8e0e92ead2c7c20513225dc12c2043ba9f/transformers-5.2.0.tar.gz", hash = "sha256:0088b8b46ccc9eff1a1dca72b5d618a5ee3b1befc3e418c9512b35dea9f9a650", size = 8618176, upload-time = "2026-02-16T18:54:02.867Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4e/93/79754b0ca486e556c2b95d4f5afc66aaf4b260694f3d6e1b51da2d036691/transformers-5.2.0-py3-none-any.whl", hash = "sha256:9ecaf243dc45bee11a7d93f8caf03746accc0cb069181bbf4ad8566c53e854b4", size = 10403304, upload-time = "2026-02-16T18:53:59.699Z" },
+]
+
+[[package]]
+name = "transformers-cfg"
+version = "0.2.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "protobuf" },
+    { name = "sentencepiece" },
+    { name = "setuptools" },
+    { name = "termcolor" },
+    { name = "tokenizers" },
+    { name = "torch" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6a/11/69735882c6817aeb76ee9e20db14482e1de974a2429002d36ea7dceb2cc3/transformers_cfg-0.2.7.tar.gz", hash = "sha256:1a282e58d9f78a15e3ddab4410938352fa981ddc52c54c4d4b35e2d17a10dbe2", size = 55141, upload-time = "2025-03-02T12:40:50.506Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/86/c30d06324f9df6ea2a9da81a23222677e86185812d6c1288f000b5221c58/transformers_cfg-0.2.7-py3-none-any.whl", hash = "sha256:4f95e97bb05862980dccd9d6c093e80ee86bdecd392d58dc87b88d81de31fc0e", size = 67402, upload-time = "2025-03-02T12:40:48.514Z" },
 ]
 
 [[package]]

@@ -28,6 +28,7 @@ dependencies = [
     "rdkit>=2023.9.1",
     "nltk>=3.8",
     "trimesh>=4.11.3",
+    "transformers-cfg>=0.2",
 ]
 
 [tool.pytest.ini_options]
