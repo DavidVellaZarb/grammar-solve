@@ -21,5 +21,6 @@ uv run python src/icl.py evaluate_gpt \
 uv run python src/plot.py plot_bar_chart \
     --result_files "[\"${RESULTS_DIR}/standard_k${K}.json\", \"${RESULTS_DIR}/knn_k${K}.json\", \"${RESULTS_DIR}/oracle_k${K}.json\"]" \
     --labels '["Standard", "kNN", "Oracle"]' \
+    --reference_lines '[{"value_from": "results/rag_ablated/test_k64.json", "metric": "accuracy", "label": "RAG (k=64)", "style": "dotted", "color": "gray"}, {"value_from": "results/ablations/p20/add_remove_rule_p20/test.json", "metric": "accuracy", "label": "Gold grammar", "style": "dashed", "color": "green"}]' \
     --output_path "${RESULTS_DIR}/icl_results.png" \
     --title "ICL Evaluation — ${MODEL} (k=${K})"
