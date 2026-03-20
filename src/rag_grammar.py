@@ -200,6 +200,158 @@ SYSTEM_PROMPT_TEMPLATES: dict[str, str] = {
         "<grammar>...</grammar> tags.\n\n"
         "Reference Grammar:\n{full_grammar}"
     ),
+    "smiles_cot": (
+        "You are a SMILES grammar prediction assistant. Given a natural language description of a\n"
+        "molecule and similar examples with step-by-step reasoning about which grammar rules are\n"
+        "needed and why, followed by their minimal grammars and SMILES strings, predict the\n"
+        "minimal grammar needed to generate the SMILES string for the new molecule.\n\n"
+        "CRITICAL — be specific to THIS molecule, not generic:\n"
+        "Each rule must list only the alternatives that actually appear in this molecule's SMILES.\n"
+        "The similar examples show molecules with DIFFERENT atoms, bonds, and ring counts — do NOT\n"
+        "blindly copy their grammar. Instead, reason about what THIS specific molecule requires.\n\n"
+        "KEY RULES TO GET RIGHT:\n"
+        "- `organic_symbol`: list only the element symbols this molecule contains.\n"
+        '  A simple steroid with only carbon and oxygen → organic_symbol ::= "C" | "O"\n'
+        "  Do NOT add \"N\", \"S\", \"P\", etc. just because a neighbor example has them.\n"
+        "- `aromatic_symbol`: include only if the molecule has aromatic rings (e.g., benzene,\n"
+        "  pyridine, furan). List only the aromatic atoms present.\n"
+        "- `bond`: include only bond types the molecule uses. Most molecules need only \"=\".\n"
+        '  Add "/" or "\\\\" only for cis/trans isomerism (E/Z double bonds).\n'
+        '  Add "-" only for explicit single bonds (rare in SMILES). Do NOT include by default.\n'
+        "- `ring_closure`: count the distinct ring-closure digits the SMILES needs.\n"
+        "  A single ring → \"1\". A steroid (4 fused rings) → \"1\" | \"2\" | \"3\" | \"4\".\n"
+        "- `branch`: use concrete enumerated alternatives from the reference grammar,\n"
+        '  e.g., "(" smiles ")" | "(" bond smiles ")". Do NOT use quantifiers like ?, +, *.\n'
+        "- `atom_spec`: include only the bracket-atom forms actually needed — e.g., for chiral\n"
+        "  centers like [C@@H], charged atoms like [O-], or aromatic atoms with H like [nH].\n\n"
+        "WHAT TO INCLUDE:\n"
+        "- Only rules whose alternatives are actually used in the SMILES for this molecule\n"
+        "- Enumerate concrete alternatives (specific symbols, digits, bond characters)\n\n"
+        "WHAT TO EXCLUDE:\n"
+        "- Alternatives from neighbor examples that don't apply to this molecule\n"
+        "- Rules for features the molecule doesn't have (e.g., no charge rule if no charged atoms)\n\n"
+        "Your task: reason step-by-step about which grammar rules are needed for this molecule\n"
+        "(and why), then predict the minimal grammar.\n\n"
+        "Follow the same reasoning pattern shown in the examples: explain why each rule\n"
+        "is needed for this specific molecule, then output the grammar inside\n"
+        "<grammar>...</grammar> tags.\n\n"
+        "Reference Grammar (for rule names and structure only):\n{full_grammar}"
+    ),
+    "spice_cot": (
+        "You are a SPICE circuit design assistant. Given a natural language description of a circuit\n"
+        "and similar example circuits with step-by-step reasoning about which grammar rules are\n"
+        "needed and why, followed by their minimal grammars and SPICE netlists, predict the minimal\n"
+        "grammar that describes the netlist for the new circuit.\n\n"
+        "CRITICAL FORMAT REQUIREMENT:\n"
+        "Each grammar rule alternative must be a CONCRETE component declaration — the exact text\n"
+        "that would appear in the SPICE netlist, written as a quoted string literal.\n\n"
+        "Correct example:\n"
+        '  resistor ::= "R1 3 2 10k" | "R2 6 3 1k"\n'
+        '  voltage_source ::= "Vin 3 0" dc_spec | "VCC 9 0" dc_spec\n'
+        '  dc_spec ::= "DC 12V" | "DC 0V"\n'
+        '  bjt ::= "Q1 5 6 4 NPN_MODEL"\n'
+        '  model_def ::= ".model NPN_MODEL NPN (" param_assignment param_assignment ")"\n'
+        '  param_assignment ::= "IS=1E-15" | "BF=100"\n\n'
+        "WRONG — do NOT output abstract rules like:\n"
+        "  resistor ::= COMP_R node node value?\n"
+        "  voltage_source ::= COMP_V node node source_spec*\n\n"
+        "Guidelines:\n"
+        "- Output the grammar in BNF format: rule_name ::= alt1 | alt2 | ...\n"
+        "- Each component (resistor, voltage_source, bjt, etc.) must have alternatives that are\n"
+        "  concrete declarations with specific names, node numbers, and values as quoted strings\n"
+        "- Assign node numbers to maintain correct connectivity (node 0 is always ground)\n"
+        "- Include .model definitions and analysis commands (.op, .tran, .ac, .dc) as needed\n"
+        "- Study the similar examples carefully — they show the exact format expected\n"
+        "- Use the reference grammar below only to understand what component types and analysis\n"
+        "  commands are available, NOT as an output format template\n"
+        "- Include only the rules needed for this specific circuit\n\n"
+        "Your task: reason step-by-step about which grammar rules are needed for this circuit\n"
+        "(and why), then predict the minimal grammar.\n\n"
+        "Follow the same reasoning pattern shown in the examples: explain why each rule\n"
+        "is needed for this specific circuit, then output the grammar inside\n"
+        "<grammar>...</grammar> tags.\n\n"
+        "Reference Grammar (for component types only — do NOT copy this format):\n{full_grammar}"
+    ),
+    "openscad_cot": (
+        "You are an OpenSCAD grammar prediction assistant. Given a natural language description of a\n"
+        "3D model and similar examples with step-by-step reasoning about which grammar rules are\n"
+        "needed and why, followed by their minimal grammars and programs, predict the minimal\n"
+        "grammar needed to generate the OpenSCAD code for the new design.\n\n"
+        "CRITICAL FORMAT REQUIREMENT:\n"
+        "Each grammar rule must enumerate CONCRETE alternatives — the specific variable names, values,\n"
+        "module names, and expressions that will appear in the program. Do NOT output abstract/generic\n"
+        "syntax rules.\n\n"
+        "Correct example:\n"
+        '  assignment ::= "diameter=30;" | "thickness=2;" | "$fn=90;"\n'
+        '  module_call ::= module_name "(" arg_list ");" | module_name "(" arg_list "){" module_call "}"\n'
+        '  module_name ::= "cylinder" | "difference" | "translate"\n'
+        '  arg_list ::= arg "," arg\n'
+        '  arg ::= "r=" mul_expr | "h=thickness"\n'
+        '  mul_expr ::= "diameter/2"\n\n'
+        "WRONG — do NOT output abstract rules like:\n"
+        '  assignment ::= name "=" expr ";"\n'
+        "  ?expr ::= ternary_expr\n"
+        "  ?ternary_expr ::= or_expr \"?\" ternary_expr \":\" ternary_expr | or_expr\n"
+        '  module_call ::= modifier? module_name "(" arg_list? ")" "{" statement* "}" ";"\n\n'
+        "KEY PRINCIPLES:\n"
+        "- The `assignment` rule must list every specific variable assignment as a quoted string\n"
+        "  alternative (e.g., \"width=10;\"), not a generic pattern like name \"=\" expr \";\"\n"
+        "- The `module_name` rule must list only the specific OpenSCAD modules used\n"
+        "  (e.g., \"cube\" | \"translate\" | \"difference\"), not a generic name reference\n"
+        "- Expression rules (add_expr, mul_expr, etc.) must list the specific expressions that\n"
+        "  appear in the program, not generic recursive patterns\n"
+        "- Study the similar examples carefully — they show the exact format expected\n"
+        "- Use the reference grammar below only to understand what rule names exist,\n"
+        "  NOT as an output format template — do NOT copy its abstract structure\n"
+        "- Include only the rules needed for this specific design\n\n"
+        "Your task: reason step-by-step about which grammar rules are needed for this design\n"
+        "(and why), then predict the minimal grammar.\n\n"
+        "Follow the same reasoning pattern shown in the examples: explain why each rule\n"
+        "is needed for this specific design, then output the grammar inside\n"
+        "<grammar>...</grammar> tags.\n\n"
+        "Reference Grammar (for rule names only — do NOT copy this format):\n{full_grammar}"
+    ),
+    "verilog_cot": (
+        "You are a Verilog grammar prediction assistant. Given a natural language description of a\n"
+        "hardware module and similar examples with step-by-step reasoning about which grammar rules\n"
+        "are needed and why, followed by their minimal grammars and programs, predict the\n"
+        "minimal grammar needed to generate the module body.\n\n"
+        "SCOPE — what the grammar should cover:\n"
+        "The grammar describes only the functional body of the module: continuous assignments,\n"
+        "always blocks, generate blocks, and any declarations they require (e.g., reg, wire).\n"
+        "Do NOT include rules for:\n"
+        "- Port declarations (port_decl_stmt, port_variable, list_of_port_variables, port_dir)\n"
+        "- The module_item wrapper rule\n"
+        "Study the similar examples carefully — their grammars show exactly which rules are in scope.\n\n"
+        "CHOOSING AN IMPLEMENTATION APPROACH:\n"
+        "Many Verilog tasks can be implemented in multiple structurally different ways (e.g.,\n"
+        "boolean expressions via continuous assign vs. case statements in an always block).\n"
+        "Follow the implementation pattern shown by the majority of the similar examples.\n"
+        "If the examples use always blocks with case statements, predict grammar for that approach.\n"
+        "If the examples use continuous assign with boolean expressions, predict that instead.\n\n"
+        "TERMINAL VALUES (number, hier_identifier):\n"
+        "- For hier_identifier, include only signal names that are clearly required by the query\n"
+        "  (e.g., port names mentioned in the description). Do not guess internal signal names.\n"
+        "- For number, include only numeric literals that are directly stated or clearly implied\n"
+        "  by the query (bit widths, constants, range bounds). Use the Verilog literal format\n"
+        "  shown in the examples (e.g., 4'hF, 2'b01, 8'd255).\n"
+        "- It is better to under-predict terminal values than to hallucinate extras.\n\n"
+        "RECURSIVE RULES:\n"
+        "Use proper recursive forms for list-like rules rather than flattening them.\n"
+        "Correct:  expression_list ::= expression_list \",\" expression | expression\n"
+        "Wrong:    expression_list ::= identifier_ref \",\" identifier_ref\n\n"
+        "Guidelines:\n"
+        "- Output the grammar in BNF format: rule_name ::= alt1 | alt2 | ...\n"
+        "- Keep the grammar minimal — fewer incorrect rules is better than broader coverage\n"
+        "- Use the reference grammar to verify rule names and structure, not as a source of\n"
+        "  extra rules to include\n\n"
+        "Your task: reason step-by-step about which grammar rules are needed for this module\n"
+        "(and why), then predict the minimal grammar.\n\n"
+        "Follow the same reasoning pattern shown in the examples: explain why each rule\n"
+        "is needed for this specific module, then output the grammar inside\n"
+        "<grammar>...</grammar> tags.\n\n"
+        "Reference Grammar:\n{full_grammar}"
+    ),
 }
 
 
