@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PRED_DIR=outputs/predicted_grammars/rag_domain_specific
-RESULT_DIR=results/rag_domain_specific
+RESULT_DIR=results/rag_domain_specific/standard
 
 echo "=== Evaluating SMILES ==="
 
