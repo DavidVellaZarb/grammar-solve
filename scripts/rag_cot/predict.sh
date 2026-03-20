@@ -86,4 +86,9 @@ uv run python src/eval_grammar.py \
     --gold_path data/openscad/test.json \
     --write
 
+uv run python src/eval_grammar.py \
+    --predicted_path "${OUTPUT_DIR}/verilog_test_k64.json" \
+    --gold_path data/verilog_eval/VerilogEval_Human_gold.json \
+    --write
+
 echo "All grammar evaluations complete."
