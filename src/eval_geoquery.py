@@ -114,12 +114,13 @@ def evaluate(
         pred_program = extract_program(pred)
 
         exact_match = gold in pred
-        exec_match = None
-        if executor is not None:
-            gold_result = _try_execute(gold, executor)
-            pred_result = _try_execute(pred_program, executor)
-            if gold_result is not None:
-                exec_match = gold_result == pred_result
+
+        gold_result = _try_execute(gold, executor)
+        assert gold_result is not None, (
+            f"Gold program failed to execute: {gold}"
+        )
+        pred_result = _try_execute(pred_program, executor)
+        exec_match = gold_result == pred_result
         gold_tokens = gold.replace("(", " ( ").replace(")", " ) ").replace(",", " , ").split()
         pred_tokens = pred_program.replace("(", " ( ").replace(")", " ) ").replace(",", " , ").split()
         bleu = sentence_bleu(
@@ -149,11 +150,10 @@ def evaluate(
         "total": total,
     }
 
-    exec_results = [r for r in results if r["execution_match"] is not None]
-    exec_count = sum(1 for r in exec_results if r["execution_match"])
-    metrics["execution_accuracy"] = exec_count / len(exec_results) if exec_results else 0.0
+    exec_count = sum(1 for r in results if r["execution_match"])
+    metrics["execution_accuracy"] = exec_count / total if total > 0 else 0.0
     metrics["execution_correct"] = exec_count
-    metrics["execution_total"] = len(exec_results)
+    metrics["execution_total"] = total
 
     print(f"Exact match:         {metrics['exact_match']:.4f} ({exact_count}/{total})")
     print(f"Execution accuracy:  {metrics['execution_accuracy']:.4f} "

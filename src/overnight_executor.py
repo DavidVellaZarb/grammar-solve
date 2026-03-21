@@ -15,7 +15,7 @@ def denormalize_lf(raw_lf: str) -> str:
     function_names = [
         "listValue", "filter", "ensureNumericProperty", "ensureNumericEntity",
         "superlative", "countSuperlative", "countComparative", "_size",
-        "aggregate", "getProperty", "singleton", "concat",
+        "aggregate", "getProperty", "singleton", "concat", "reverse",
     ]
     string_symbols = [
         "shape", "color", "length", "is_special", "width", "height",
