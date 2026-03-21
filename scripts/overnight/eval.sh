@@ -5,15 +5,20 @@ uv run python src/eval_overnight.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_overnight-baseline" \
     --test_path data/overnight/test.json \
     --noinclude_grammar \
-    --output_path results/overnight/baseline/test.json \
-    "$@"
+    --output_path results/overnight/baseline/test.json
 
 uv run python src/eval_overnight.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_overnight" \
     --test_path data/overnight/test.json \
     --include_grammar \
-    --output_path results/overnight/grammar/test.json \
-    "$@"
+    --output_path results/overnight/grammar/test.json
+
+uv run python src/eval_overnight.py \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_overnight" \
+    --test_path data/overnight/test.json \
+    --include_grammar \
+    --grammar_file outputs/predicted_grammars/rag_cot/overnight_test_k64.json \
+    --output_path results/overnight/rag/test.json
 
 uv run python src/plot.py plot_multi_metrics \
     --result_files '["results/overnight/baseline/test.json", "results/overnight/rag/test.json", "results/overnight/grammar/test.json"]' \

@@ -14,5 +14,5 @@ uv run python src/eval.py \
     --adapter "$NORMAL_ADAPTER" \
     --grammar_file "$COT_GRAMMARS" \
     --test_path "$TEST_PATH" \
-    --output_path "results/grammar_CoT/test.json" \
-    "$@"
+    --output_path "results/grammar_CoT/test.json"
+

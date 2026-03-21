@@ -12,8 +12,7 @@ uv run python src/rag_grammar.py predict \
     --cache_path cache/rag_cot_smiles_cache.json \
     --max_tokens 4096 \
     --prompt_style cot \
-    --mode batch \
-    "$@" &
+    --mode batch &
 PID_SMILES=$!
 
 uv run python src/rag_grammar.py predict \
@@ -25,8 +24,7 @@ uv run python src/rag_grammar.py predict \
     --cache_path cache/rag_cot_spice_cache.json \
     --max_tokens 4096 \
     --prompt_style cot \
-    --mode batch \
-    "$@" &
+    --mode batch &
 PID_SPICE=$!
 
 uv run python src/rag_grammar.py predict \
@@ -38,8 +36,7 @@ uv run python src/rag_grammar.py predict \
     --cache_path cache/rag_cot_openscad_cache.json \
     --max_tokens 4096 \
     --prompt_style cot \
-    --mode batch \
-    "$@" &
+    --mode batch &
 PID_OPENSCAD=$!
 
 uv run python src/rag_grammar.py predict \
@@ -51,8 +48,7 @@ uv run python src/rag_grammar.py predict \
     --cache_path cache/rag_cot_verilog_cache.json \
     --max_tokens 4096 \
     --prompt_style cot \
-    --mode batch \
-    "$@" &
+    --mode batch &
 PID_VERILOG=$!
 
 echo "All batches submitted. Waiting for completion..."

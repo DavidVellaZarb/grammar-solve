@@ -8,15 +8,15 @@ CACHE="cache/icl_${MODEL}_cache.json"
 
 uv run python src/icl.py evaluate_gpt \
     --mode standard --model "$MODEL" --k "$K" \
-    --cache_path "$CACHE" "$@"
+    --cache_path "$CACHE"
 
 uv run python src/icl.py evaluate_gpt \
     --mode knn --model "$MODEL" --k "$K" \
-    --cache_path "$CACHE" "$@"
+    --cache_path "$CACHE"
 
 uv run python src/icl.py evaluate_gpt \
     --mode oracle --model "$MODEL" --k "$K" \
-    --cache_path "$CACHE" "$@"
+    --cache_path "$CACHE"
 
 uv run python src/plot.py plot_bar_chart \
     --result_files "[\"${RESULTS_DIR}/standard_k${K}.json\", \"${RESULTS_DIR}/knn_k${K}.json\", \"${RESULTS_DIR}/oracle_k${K}.json\"]" \

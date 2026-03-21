@@ -7,5 +7,5 @@ uv run python src/train.py \
     --valid_path "data/smcalflow/valid_balanced_cot.json" \
     --output_dir "outputs/qwen2.5-7b-lora-grammar-cot" \
     --hub_model_id "${HF_NAMESPACE}/qwen2.5-7b_smcalflow_balanced-grammar-cot" \
-    --max_seq_length 2048 \
-    "$@"
+    --max_seq_length 2048
+

@@ -5,7 +5,7 @@ uv run python src/eval_openscad.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_openscad-baseline" \
     --test_path data/openscad/test.json \
     --noinclude_grammar \
-    --output_path results/openscad/baseline/test.json \
+    --output_path results/openscad/baseline/test.json
 
 uv run python src/eval_openscad.py \
     --adapter "${HF_NAMESPACE}/qwen2.5-7b_openscad" \

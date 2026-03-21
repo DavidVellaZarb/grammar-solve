@@ -10,8 +10,7 @@ uv run python src/rag_grammar.py predict \
     --k 64 \
     --output_path "${OUTPUT_DIR}/smiles_test_k64.json" \
     --cache_path cache/rag_domain_specific_smiles_cache.json \
-    --mode batch \
-    "$@" &
+    --mode batch &
 PID_SMILES=$!
 
 uv run python src/rag_grammar.py predict \
@@ -21,8 +20,7 @@ uv run python src/rag_grammar.py predict \
     --k 64 \
     --output_path "${OUTPUT_DIR}/spice_test_k64.json" \
     --cache_path cache/rag_domain_specific_spice_cache.json \
-    --mode batch \
-    "$@" &
+    --mode batch &
 PID_SPICE=$!
 
 uv run python src/rag_grammar.py predict \
@@ -32,8 +30,7 @@ uv run python src/rag_grammar.py predict \
     --k 64 \
     --output_path "${OUTPUT_DIR}/openscad_test_k64.json" \
     --cache_path cache/rag_domain_specific_openscad_cache.json \
-    --mode batch \
-    "$@" &
+    --mode batch &
 PID_OPENSCAD=$!
 
 uv run python src/rag_grammar.py predict \
@@ -43,8 +40,7 @@ uv run python src/rag_grammar.py predict \
     --k 64 \
     --output_path "${OUTPUT_DIR}/verilog_test_k64.json" \
     --cache_path cache/rag_domain_specific_verilog_cache.json \
-    --mode batch \
-    "$@" &
+    --mode batch &
 PID_VERILOG=$!
 
 echo "All batches submitted. Waiting for completion..."

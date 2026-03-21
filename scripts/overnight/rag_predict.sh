@@ -10,8 +10,7 @@ uv run python src/rag_grammar.py predict \
     --cache_path cache/rag_overnight_cache.json \
     --max_tokens 4096 \
     --prompt_style cot \
-    --mode batch \
-    "$@"
+    --mode batch
 
 uv run python src/eval_grammar.py \
     --predicted_path outputs/predicted_grammars/rag_cot/overnight_test_k64.json \

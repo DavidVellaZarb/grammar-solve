@@ -6,5 +6,5 @@ uv run python src/generate_grammar.py \
     --test_path "data/smcalflow/test_balanced.json" \
     --output_path "outputs/predicted_grammars/balanced_cot.json" \
     --task grammar_cot \
-    --max_new_tokens 1024 \
-    "$@"
+    --max_new_tokens 1024
+
