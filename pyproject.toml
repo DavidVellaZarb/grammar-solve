@@ -29,6 +29,8 @@ dependencies = [
     "nltk>=3.8",
     "trimesh>=4.11.3",
     "transformers-cfg>=0.2",
+    "pyperplan>=2.1",
+    "pyswip>=0.2",
 ]
 
 [tool.pytest.ini_options]

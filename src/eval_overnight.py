@@ -32,6 +32,13 @@ def evaluate(
     include_grammar: bool = True,
     task: str = "program",
 ):
+    from overnight_executor import denormalize_lf, execute, is_available
+    assert is_available(), (
+        "Overnight SEMPRE evaluator not found at third_party/overnight/evaluator/overnight. "
+        "Run scripts/overnight/setup_evaluator.sh to set it up."
+    )
+    print("Overnight executor loaded (execution accuracy will be computed)")
+
     peft_config = PeftConfig.from_pretrained(adapter)
     base_model_name = model_name or peft_config.base_model_name_or_path
     assert base_model_name is not None
@@ -97,39 +104,22 @@ def evaluate(
     del model
     torch.cuda.empty_cache()
 
-    # Try to load executor for execution accuracy
-    executor_available = False
-    try:
-        from overnight_executor import denormalize_lf, execute, is_available
-        executor_available = is_available()
-        if executor_available:
-            print("Overnight executor loaded (execution accuracy will be computed)")
-        else:
-            print("Overnight SEMPRE evaluator not found, skipping execution accuracy")
-    except Exception as e:
-        print(f"Overnight executor not available ({e}), skipping execution accuracy")
-
     results = []
     for ex, prompt, pred in zip(examples, prompts, predictions):
         gold = ex["program"]
         pred_program = extract_program(pred)
 
         exact_match = gold in pred
-
-        # Execution accuracy
         exec_match = None
-        if executor_available:
-            try:
-                gold_denorm = denormalize_lf(gold)
-                pred_denorm = denormalize_lf(pred_program)
-                gold_results = execute([gold_denorm])
-                pred_results = execute([pred_denorm])
-                if gold_results[0] is not None:
-                    exec_match = gold_results[0] == pred_results[0]
-            except Exception:
-                exec_match = None
-
-        # BLEU
+        try:
+            gold_denorm = denormalize_lf(gold)
+            pred_denorm = denormalize_lf(pred_program)
+            gold_results = execute([gold_denorm])
+            pred_results = execute([pred_denorm])
+            if gold_results[0] is not None:
+                exec_match = gold_results[0] == pred_results[0]
+        except Exception:
+            exec_match = None
         gold_tokens = gold.replace("(", " ( ").replace(")", " ) ").split()
         pred_tokens = pred_program.replace("(", " ( ").replace(")", " ) ").split()
         bleu = sentence_bleu(
@@ -160,16 +150,14 @@ def evaluate(
     }
 
     exec_results = [r for r in results if r["execution_match"] is not None]
-    if exec_results:
-        exec_count = sum(1 for r in exec_results if r["execution_match"])
-        metrics["execution_accuracy"] = exec_count / len(exec_results)
-        metrics["execution_correct"] = exec_count
-        metrics["execution_total"] = len(exec_results)
+    exec_count = sum(1 for r in exec_results if r["execution_match"])
+    metrics["execution_accuracy"] = exec_count / len(exec_results) if exec_results else 0.0
+    metrics["execution_correct"] = exec_count
+    metrics["execution_total"] = len(exec_results)
 
     print(f"Exact match:         {metrics['exact_match']:.4f} ({exact_count}/{total})")
-    if "execution_accuracy" in metrics:
-        print(f"Execution accuracy:  {metrics['execution_accuracy']:.4f} "
-              f"({metrics['execution_correct']}/{metrics['execution_total']})")
+    print(f"Execution accuracy:  {metrics['execution_accuracy']:.4f} "
+          f"({metrics['execution_correct']}/{metrics['execution_total']})")
     print(f"BLEU:                {metrics['bleu']:.4f}")
 
     if output_path:

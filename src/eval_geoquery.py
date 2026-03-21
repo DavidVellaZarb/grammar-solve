@@ -39,6 +39,10 @@ def evaluate(
     include_grammar: bool = True,
     task: str = "program",
 ):
+    from geo_executor import GeoExecutor
+    executor = GeoExecutor()
+    print("GeoQuery executor loaded (execution accuracy will be computed)")
+
     peft_config = PeftConfig.from_pretrained(adapter)
     base_model_name = model_name or peft_config.base_model_name_or_path
     assert base_model_name is not None
@@ -104,31 +108,18 @@ def evaluate(
     del model
     torch.cuda.empty_cache()
 
-    # Try to load executor for execution accuracy
-    executor = None
-    try:
-        from geo_executor import GeoExecutor
-        executor = GeoExecutor()
-        print("GeoQuery executor loaded (execution accuracy will be computed)")
-    except Exception as e:
-        print(f"GeoQuery executor not available ({e}), skipping execution accuracy")
-
     results = []
     for ex, prompt, pred in zip(examples, prompts, predictions):
         gold = ex["program"]
         pred_program = extract_program(pred)
 
         exact_match = gold in pred
-
-        # Execution accuracy
         exec_match = None
         if executor is not None:
             gold_result = _try_execute(gold, executor)
             pred_result = _try_execute(pred_program, executor)
             if gold_result is not None:
                 exec_match = gold_result == pred_result
-
-        # BLEU
         gold_tokens = gold.replace("(", " ( ").replace(")", " ) ").replace(",", " , ").split()
         pred_tokens = pred_program.replace("(", " ( ").replace(")", " ) ").replace(",", " , ").split()
         bleu = sentence_bleu(
@@ -159,16 +150,14 @@ def evaluate(
     }
 
     exec_results = [r for r in results if r["execution_match"] is not None]
-    if exec_results:
-        exec_count = sum(1 for r in exec_results if r["execution_match"])
-        metrics["execution_accuracy"] = exec_count / len(exec_results)
-        metrics["execution_correct"] = exec_count
-        metrics["execution_total"] = len(exec_results)
+    exec_count = sum(1 for r in exec_results if r["execution_match"])
+    metrics["execution_accuracy"] = exec_count / len(exec_results) if exec_results else 0.0
+    metrics["execution_correct"] = exec_count
+    metrics["execution_total"] = len(exec_results)
 
     print(f"Exact match:         {metrics['exact_match']:.4f} ({exact_count}/{total})")
-    if "execution_accuracy" in metrics:
-        print(f"Execution accuracy:  {metrics['execution_accuracy']:.4f} "
-              f"({metrics['execution_correct']}/{metrics['execution_total']})")
+    print(f"Execution accuracy:  {metrics['execution_accuracy']:.4f} "
+          f"({metrics['execution_correct']}/{metrics['execution_total']})")
     print(f"BLEU:                {metrics['bleu']:.4f}")
 
     if output_path:
