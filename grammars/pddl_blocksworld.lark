@@ -1,0 +1,13 @@
+plan: action+
+
+action: "(pick-up" object ")"
+      | "(put-down" object ")"
+      | "(stack" object object ")"
+      | "(unstack" object object ")"
+
+object: OBJECT_NAME
+
+OBJECT_NAME: /[a-z]+/
+
+%import common.WS
+%ignore WS

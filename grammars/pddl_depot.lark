@@ -1,0 +1,14 @@
+plan: action+
+
+action: "(drive" object object object ")"
+      | "(lift" object object object object ")"
+      | "(drop" object object object object ")"
+      | "(load" object object object object ")"
+      | "(unload" object object object object ")"
+
+object: OBJECT_NAME
+
+OBJECT_NAME: /[a-z][a-z0-9_]*/
+
+%import common.WS
+%ignore WS

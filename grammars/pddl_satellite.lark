@@ -1,0 +1,14 @@
+plan: action+
+
+action: "(turn_to" object object object ")"
+      | "(switch_on" object object ")"
+      | "(switch_off" object object ")"
+      | "(calibrate" object object object ")"
+      | "(take_image" object object object object ")"
+
+object: OBJECT_NAME
+
+OBJECT_NAME: /[a-z][a-z0-9_]*/
+
+%import common.WS
+%ignore WS
