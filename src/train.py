@@ -10,6 +10,8 @@ from trl.trainer.sft_config import SFTConfig
 from trl.trainer.sft_trainer import SFTTrainer
 from transformers import AutoTokenizer
 
+from datasets import concatenate_datasets
+
 from data import load_data
 
 load_dotenv()
@@ -45,14 +47,23 @@ def train(
     hub_model_id: str | None = None,
     include_grammar: bool = True,
     task: str = "program",
+    mixed: bool = False,
 ):
     model_alias = model_name.split("/")[-1].lower().removesuffix("-instruct")
     dataset_name = Path(train_path).parent.name
     hf_namespace = os.getenv("HF_NAMESPACE", "")
     hub_repo = hub_model_id or (f"{hf_namespace}/{model_alias}_{dataset_name}" if hf_namespace else None)
 
-    train_ds = load_data(train_path, include_grammar=include_grammar, task=task)
-    valid_ds = load_data(valid_path, include_grammar=include_grammar, task=task)
+    if mixed:
+        train_with = load_data(train_path, include_grammar=True, task=task)
+        train_without = load_data(train_path, include_grammar=False, task=task)
+        train_ds = concatenate_datasets([train_with, train_without]).shuffle(seed=42)
+        valid_with = load_data(valid_path, include_grammar=True, task=task)
+        valid_without = load_data(valid_path, include_grammar=False, task=task)
+        valid_ds = concatenate_datasets([valid_with, valid_without]).shuffle(seed=42)
+    else:
+        train_ds = load_data(train_path, include_grammar=include_grammar, task=task)
+        valid_ds = load_data(valid_path, include_grammar=include_grammar, task=task)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
@@ -66,7 +77,9 @@ def train(
         task_type=TaskType.CAUSAL_LM,
     )
 
-    if task == "grammar_program":
+    if mixed:
+        run_type = "mixed"
+    elif task == "grammar_program":
         run_type = "grammar_program"
     elif task == "grammar":
         run_type = "predict_grammar"
