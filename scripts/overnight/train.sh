@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+MODEL_NAME=$1
+MODEL_ALIAS=$2
+
 model_exists() {
     uv run python -c "from huggingface_hub import repo_exists; print(repo_exists('$1', repo_type='model'))" 2>/dev/null | grep -q "True"
 }
@@ -8,40 +11,43 @@ model_exists() {
 TRAIN_PATH=data/overnight/train.json
 VALID_PATH=data/overnight/valid.json
 
-HUB_ID="${HF_NAMESPACE}/qwen2.5-7b_overnight-baseline"
+HUB_ID="${HF_NAMESPACE}/${MODEL_ALIAS}_overnight-baseline"
 if model_exists "$HUB_ID"; then
     echo "SKIP $HUB_ID (exists)"
 else
     uv run python src/train.py \
+        --model_name "$MODEL_NAME" \
         --noinclude_grammar \
         --num_train_epochs 1 \
         --train_path "$TRAIN_PATH" \
         --valid_path "$VALID_PATH" \
-        --output_dir outputs/qwen2.5-7b-lora-overnight-baseline \
+        --output_dir "outputs/${MODEL_ALIAS}-lora-overnight-baseline" \
         --hub_model_id "$HUB_ID"
 fi
 
-HUB_ID="${HF_NAMESPACE}/qwen2.5-7b_overnight-baseline-2epoch"
+HUB_ID="${HF_NAMESPACE}/${MODEL_ALIAS}_overnight-baseline-2epoch"
 if model_exists "$HUB_ID"; then
     echo "SKIP $HUB_ID (exists)"
 else
     uv run python src/train.py \
+        --model_name "$MODEL_NAME" \
         --noinclude_grammar \
         --num_train_epochs 2 \
         --train_path "$TRAIN_PATH" \
         --valid_path "$VALID_PATH" \
-        --output_dir outputs/qwen2.5-7b-lora-overnight-baseline-2epoch \
+        --output_dir "outputs/${MODEL_ALIAS}-lora-overnight-baseline-2epoch" \
         --hub_model_id "$HUB_ID"
 fi
 
-HUB_ID="${HF_NAMESPACE}/qwen2.5-7b_overnight-mixed"
+HUB_ID="${HF_NAMESPACE}/${MODEL_ALIAS}_overnight-mixed"
 if model_exists "$HUB_ID"; then
     echo "SKIP $HUB_ID (exists)"
 else
     uv run python src/train.py \
+        --model_name "$MODEL_NAME" \
         --mixed \
         --train_path "$TRAIN_PATH" \
         --valid_path "$VALID_PATH" \
-        --output_dir outputs/qwen2.5-7b-lora-overnight-mixed \
+        --output_dir "outputs/${MODEL_ALIAS}-lora-overnight-mixed" \
         --hub_model_id "$HUB_ID"
 fi

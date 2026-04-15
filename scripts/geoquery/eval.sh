@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RESULT_DIR=results/geoquery
+MODEL_NAME=$1
+MODEL_ALIAS=$2
+
+RESULT_DIR="results/geoquery/${MODEL_ALIAS}"
 PRED_DIR=outputs/predicted_grammars/rag_cot
 
 echo "=== Baseline (2-epoch, no grammar) ==="
 uv run python src/eval_geoquery.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_geoquery-baseline-2epoch" \
+    --adapter "${HF_NAMESPACE}/${MODEL_ALIAS}_geoquery-baseline-2epoch" \
     --test_path data/geoquery/test.json \
     --noinclude_grammar \
     --output_path "${RESULT_DIR}/baseline.json"
 
 echo "=== Ours (mixed + RAG grammar) ==="
 uv run python src/eval_geoquery.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_geoquery-mixed" \
+    --adapter "${HF_NAMESPACE}/${MODEL_ALIAS}_geoquery-mixed" \
     --test_path data/geoquery/test.json \
     --include_grammar \
     --grammar_file "${PRED_DIR}/geoquery_test_k64.json" \
@@ -21,7 +24,7 @@ uv run python src/eval_geoquery.py \
 
 echo "=== Gold grammar ==="
 uv run python src/eval_geoquery.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_geoquery-mixed" \
+    --adapter "${HF_NAMESPACE}/${MODEL_ALIAS}_geoquery-mixed" \
     --test_path data/geoquery/test.json \
     --include_grammar \
     --output_path "${RESULT_DIR}/gold.json"
@@ -34,4 +37,4 @@ uv run python src/plot.py plot_paper_results \
     --metric_labels '{"accuracy": "Exact Match", "execution_accuracy": "Execution Accuracy"}' \
     --per_example_fields '{"accuracy": "match", "execution_accuracy": "execution_match"}' \
     --output_path "${RESULT_DIR}/comparison.png" \
-    --title "GeoQuery"
+    --title "GeoQuery (${MODEL_ALIAS})"

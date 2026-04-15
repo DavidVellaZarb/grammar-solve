@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RESULT_DIR=results/openscad
+MODEL_NAME=$1
+MODEL_ALIAS=$2
+
+RESULT_DIR="results/openscad/${MODEL_ALIAS}"
 PRED_DIR=outputs/predicted_grammars/rag_cot
 
 echo "=== Baseline (2-epoch, no grammar) ==="
 uv run python src/eval_openscad.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_openscad-baseline-2epoch" \
+    --adapter "${HF_NAMESPACE}/${MODEL_ALIAS}_openscad-baseline-2epoch" \
     --test_path data/openscad/test.json \
     --noinclude_grammar \
     --output_path "${RESULT_DIR}/baseline.json"
 
 echo "=== Ours (mixed + RAG grammar) ==="
 uv run python src/eval_openscad.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_openscad-mixed" \
+    --adapter "${HF_NAMESPACE}/${MODEL_ALIAS}_openscad-mixed" \
     --test_path data/openscad/test.json \
     --include_grammar \
     --grammar_file "${PRED_DIR}/openscad_test_k64.json" \
@@ -21,7 +24,7 @@ uv run python src/eval_openscad.py \
 
 echo "=== Gold grammar ==="
 uv run python src/eval_openscad.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_openscad-mixed" \
+    --adapter "${HF_NAMESPACE}/${MODEL_ALIAS}_openscad-mixed" \
     --test_path data/openscad/test.json \
     --include_grammar \
     --output_path "${RESULT_DIR}/gold.json"
@@ -34,4 +37,4 @@ uv run python src/plot.py plot_paper_results \
     --metric_labels '{"iou": "Volumetric IoU", "syntax_validity": "Syntax Validity"}' \
     --per_example_fields '{"iou": "iou", "syntax_validity": "valid"}' \
     --output_path "${RESULT_DIR}/comparison.png" \
-    --title "OpenSCAD"
+    --title "OpenSCAD (${MODEL_ALIAS})"
