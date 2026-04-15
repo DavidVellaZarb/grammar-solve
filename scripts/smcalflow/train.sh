@@ -5,10 +5,10 @@ model_exists() {
     uv run python -c "from huggingface_hub import repo_exists; print(repo_exists('$1', repo_type='model'))" 2>/dev/null | grep -q "True"
 }
 
-TRAIN_PATH=data/geoquery/train.json
-VALID_PATH=data/geoquery/valid.json
+TRAIN_PATH=data/smcalflow/train.json
+VALID_PATH=data/smcalflow/valid.json
 
-HUB_ID="${HF_NAMESPACE}/qwen2.5-7b_geoquery-baseline"
+HUB_ID="${HF_NAMESPACE}/qwen2.5-7b_smcalflow-baseline"
 if model_exists "$HUB_ID"; then
     echo "SKIP $HUB_ID (exists)"
 else
@@ -17,11 +17,11 @@ else
         --num_train_epochs 1 \
         --train_path "$TRAIN_PATH" \
         --valid_path "$VALID_PATH" \
-        --output_dir outputs/qwen2.5-7b-lora-geoquery-baseline \
+        --output_dir outputs/qwen2.5-7b-lora-smcalflow-baseline \
         --hub_model_id "$HUB_ID"
 fi
 
-HUB_ID="${HF_NAMESPACE}/qwen2.5-7b_geoquery-baseline-2epoch"
+HUB_ID="${HF_NAMESPACE}/qwen2.5-7b_smcalflow-baseline-2epoch"
 if model_exists "$HUB_ID"; then
     echo "SKIP $HUB_ID (exists)"
 else
@@ -30,11 +30,11 @@ else
         --num_train_epochs 2 \
         --train_path "$TRAIN_PATH" \
         --valid_path "$VALID_PATH" \
-        --output_dir outputs/qwen2.5-7b-lora-geoquery-baseline-2epoch \
+        --output_dir outputs/qwen2.5-7b-lora-smcalflow-baseline-2epoch \
         --hub_model_id "$HUB_ID"
 fi
 
-HUB_ID="${HF_NAMESPACE}/qwen2.5-7b_geoquery-mixed"
+HUB_ID="${HF_NAMESPACE}/qwen2.5-7b_smcalflow-mixed"
 if model_exists "$HUB_ID"; then
     echo "SKIP $HUB_ID (exists)"
 else
@@ -42,6 +42,6 @@ else
         --mixed \
         --train_path "$TRAIN_PATH" \
         --valid_path "$VALID_PATH" \
-        --output_dir outputs/qwen2.5-7b-lora-geoquery-mixed \
+        --output_dir outputs/qwen2.5-7b-lora-smcalflow-mixed \
         --hub_model_id "$HUB_ID"
 fi

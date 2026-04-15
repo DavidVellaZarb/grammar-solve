@@ -1,22 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+RESULT_DIR=results/smiles
+PRED_DIR=outputs/predicted_grammars/rag_cot
+
+echo "=== Baseline (2-epoch, no grammar) ==="
 uv run python src/eval_smiles.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_smiles-baseline" \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_smiles-baseline-2epoch" \
     --test_path data/smiles/test.json \
     --noinclude_grammar \
-    --output_path results/smiles/baseline/test.json
+    --output_path "${RESULT_DIR}/baseline.json"
 
+echo "=== Ours (mixed + RAG grammar) ==="
 uv run python src/eval_smiles.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_smiles" \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_smiles-mixed" \
     --test_path data/smiles/test.json \
     --include_grammar \
-    --output_path results/smiles/grammar/test.json
+    --grammar_file "${PRED_DIR}/smiles_test_k64.json" \
+    --output_path "${RESULT_DIR}/rag.json"
 
-uv run python src/plot.py plot_multi_metrics \
-    --result_files '["results/smiles/baseline/test.json", "results/smiles/grammar/test.json"]' \
-    --labels '["Baseline", "Grammar-Guided (Ours)"]' \
-    --metrics '["canonical_exact_match", "validity", "fingerprint_similarity", "bleu"]' \
-    --metric_labels '{"canonical_exact_match": "Exact Match", "validity": "Validity", "fingerprint_similarity": "FTS (Morgan)", "bleu": "BLEU"}' \
-    --output_path results/smiles/comparison.png \
-    --title "SMILES Generation"
+echo "=== Gold grammar ==="
+uv run python src/eval_smiles.py \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_smiles-mixed" \
+    --test_path data/smiles/test.json \
+    --include_grammar \
+    --output_path "${RESULT_DIR}/gold.json"
+
+echo "=== Plotting ==="
+uv run python src/plot.py plot_paper_results \
+    --result_files "[\"${RESULT_DIR}/baseline.json\", \"${RESULT_DIR}/rag.json\", \"${RESULT_DIR}/gold.json\"]" \
+    --labels '["Baseline", "Ours (RAG)", "Gold Grammar"]' \
+    --metrics '["fingerprint_similarity", "validity", "canonical_exact_match"]' \
+    --metric_labels '{"fingerprint_similarity": "Fingerprint Similarity", "validity": "Validity", "canonical_exact_match": "Exact Match"}' \
+    --per_example_fields '{"fingerprint_similarity": "fingerprint_similarity", "validity": "valid", "canonical_exact_match": "canonical_match"}' \
+    --output_path "${RESULT_DIR}/comparison.png" \
+    --title "SMILES"

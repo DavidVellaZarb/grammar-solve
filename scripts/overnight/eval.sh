@@ -1,29 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+RESULT_DIR=results/overnight
+PRED_DIR=outputs/predicted_grammars/rag_cot
+
+echo "=== Baseline (2-epoch, no grammar) ==="
 uv run python src/eval_overnight.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_overnight-baseline" \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_overnight-baseline-2epoch" \
     --test_path data/overnight/test.json \
     --noinclude_grammar \
-    --output_path results/overnight/baseline/test.json
+    --output_path "${RESULT_DIR}/baseline.json"
 
+echo "=== Ours (mixed + RAG grammar) ==="
 uv run python src/eval_overnight.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_overnight" \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_overnight-mixed" \
     --test_path data/overnight/test.json \
     --include_grammar \
-    --output_path results/overnight/grammar/test.json
+    --grammar_file "${PRED_DIR}/overnight_test_k64.json" \
+    --output_path "${RESULT_DIR}/rag.json"
 
+echo "=== Gold grammar ==="
 uv run python src/eval_overnight.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_overnight" \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_overnight-mixed" \
     --test_path data/overnight/test.json \
     --include_grammar \
-    --grammar_file outputs/predicted_grammars/rag_cot/overnight_test_k64.json \
-    --output_path results/overnight/rag/test.json
+    --output_path "${RESULT_DIR}/gold.json"
 
-uv run python src/plot.py plot_multi_metrics \
-    --result_files '["results/overnight/baseline/test.json", "results/overnight/rag/test.json", "results/overnight/grammar/test.json"]' \
-    --labels '["Baseline", "RAG", "Gold Grammar"]' \
-    --metrics '["execution_accuracy", "exact_match", "bleu"]' \
-    --metric_labels '{"execution_accuracy": "Execution Acc", "exact_match": "Exact Match", "bleu": "BLEU"}' \
-    --output_path results/overnight/comparison.png \
-    --title "Overnight-Blocks: Baseline vs RAG vs Gold Grammar"
+echo "=== Plotting ==="
+uv run python src/plot.py plot_paper_results \
+    --result_files "[\"${RESULT_DIR}/baseline.json\", \"${RESULT_DIR}/rag.json\", \"${RESULT_DIR}/gold.json\"]" \
+    --labels '["Baseline", "Ours (RAG)", "Gold Grammar"]' \
+    --metrics '["accuracy", "execution_accuracy"]' \
+    --metric_labels '{"accuracy": "Exact Match", "execution_accuracy": "Execution Accuracy"}' \
+    --per_example_fields '{"accuracy": "match", "execution_accuracy": "execution_match"}' \
+    --output_path "${RESULT_DIR}/comparison.png" \
+    --title "Overnight-Blocks"

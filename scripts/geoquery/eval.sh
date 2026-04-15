@@ -1,29 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+RESULT_DIR=results/geoquery
+PRED_DIR=outputs/predicted_grammars/rag_cot
+
+echo "=== Baseline (2-epoch, no grammar) ==="
 uv run python src/eval_geoquery.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_geoquery-baseline" \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_geoquery-baseline-2epoch" \
     --test_path data/geoquery/test.json \
     --noinclude_grammar \
-    --output_path results/geoquery/baseline/test.json
+    --output_path "${RESULT_DIR}/baseline.json"
 
+echo "=== Ours (mixed + RAG grammar) ==="
 uv run python src/eval_geoquery.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_geoquery" \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_geoquery-mixed" \
     --test_path data/geoquery/test.json \
     --include_grammar \
-    --output_path results/geoquery/grammar/test.json
+    --grammar_file "${PRED_DIR}/geoquery_test_k64.json" \
+    --output_path "${RESULT_DIR}/rag.json"
 
+echo "=== Gold grammar ==="
 uv run python src/eval_geoquery.py \
-    --adapter "${HF_NAMESPACE}/qwen2.5-7b_geoquery" \
+    --adapter "${HF_NAMESPACE}/qwen2.5-7b_geoquery-mixed" \
     --test_path data/geoquery/test.json \
     --include_grammar \
-    --grammar_file outputs/predicted_grammars/rag_cot/geoquery_test_k64.json \
-    --output_path results/geoquery/rag/test.json
+    --output_path "${RESULT_DIR}/gold.json"
 
-uv run python src/plot.py plot_multi_metrics \
-    --result_files '["results/geoquery/baseline/test.json", "results/geoquery/rag/test.json", "results/geoquery/grammar/test.json"]' \
-    --labels '["Baseline", "RAG", "Gold Grammar"]' \
-    --metrics '["execution_accuracy", "exact_match", "bleu"]' \
-    --metric_labels '{"execution_accuracy": "Execution Acc", "exact_match": "Exact Match", "bleu": "BLEU"}' \
-    --output_path results/geoquery/comparison.png \
-    --title "GeoQuery: Baseline vs RAG vs Gold Grammar"
+echo "=== Plotting ==="
+uv run python src/plot.py plot_paper_results \
+    --result_files "[\"${RESULT_DIR}/baseline.json\", \"${RESULT_DIR}/rag.json\", \"${RESULT_DIR}/gold.json\"]" \
+    --labels '["Baseline", "Ours (RAG)", "Gold Grammar"]' \
+    --metrics '["accuracy", "execution_accuracy"]' \
+    --metric_labels '{"accuracy": "Exact Match", "execution_accuracy": "Execution Accuracy"}' \
+    --per_example_fields '{"accuracy": "match", "execution_accuracy": "execution_match"}' \
+    --output_path "${RESULT_DIR}/comparison.png" \
+    --title "GeoQuery"

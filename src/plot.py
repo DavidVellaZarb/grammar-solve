@@ -280,6 +280,7 @@ def plot_bar_chart(
     labels: list[str] | None = None,
     metric: str = "accuracy",
     reference_lines: list[dict] | None = None,
+    colors: list[str] | None = None,
     output_path: str = "results/bar_chart.png",
     title: str | None = None,
     ylabel: str = "Accuracy",
@@ -295,6 +296,7 @@ def plot_bar_chart(
             - label (str): legend label
             - style (str): "dotted" or "dashed"
             - color (str): line color
+        colors: List of bar colors (one per result_file). Uses default if None.
         output_path: Where to save the figure.
         title: Chart title.
         ylabel: Y-axis label.
@@ -309,7 +311,8 @@ def plot_bar_chart(
         values.append(_resolve_metric(data, metric))
 
     fig, ax = plt.subplots(figsize=(max(6, len(result_files) * 1.5), 5))
-    bars = ax.bar(range(len(values)), values, width=0.5)
+    bar_colors = colors if colors else [None] * len(values)
+    bars = ax.bar(range(len(values)), values, width=0.5, color=bar_colors)
 
     for bar, val in zip(bars, values):
         ax.text(
@@ -486,6 +489,281 @@ def plot_lines(
     print(f"Saved plot to {output_path}")
 
 
+def plot_paired_comparison(
+    standard_files: list[str],
+    mixed_files: list[str],
+    group_labels: list[str],
+    metrics: list[str],
+    metric_labels: dict[str, str] | None = None,
+    output_path: str = "results/comparison.png",
+    title: str | None = None,
+    standard_label: str = "Standard",
+    mixed_label: str = "Mixed",
+    format_str: str = ".2%",
+):
+    """Plot paired comparison bar charts (Standard vs Mixed) grouped by comparison type.
+
+    Creates one subplot per metric. Each subplot has group_labels on x-axis
+    with two bars per group (Standard and Mixed) in distinct colours.
+
+    Args:
+        standard_files: Result JSON files for the standard model (one per group).
+        mixed_files: Result JSON files for the mixed model (one per group).
+        group_labels: Labels for each comparison group (e.g., Baseline, RAG, Gold).
+        metrics: Metric keys to plot (one subplot each). Supports dot notation.
+        metric_labels: Mapping from metric key to display label.
+        output_path: Where to save the figure.
+        title: Overall figure title.
+        standard_label: Legend label for standard bars.
+        mixed_label: Legend label for mixed bars.
+        format_str: Format string for bar value annotations.
+    """
+    metric_labels = metric_labels or {}
+    n_metrics = len(metrics)
+    n_groups = len(group_labels)
+
+    standard_data = []
+    for path in standard_files:
+        with open(path) as f:
+            standard_data.append(json.load(f))
+
+    mixed_data = []
+    for path in mixed_files:
+        with open(path) as f:
+            mixed_data.append(json.load(f))
+
+    ncols = min(3, n_metrics)
+    nrows = (n_metrics + ncols - 1) // ncols
+    fig, axes = plt.subplots(
+        nrows, ncols,
+        figsize=(max(4, n_groups * 1.8) * ncols, 4.5 * nrows),
+        squeeze=False,
+    )
+
+    standard_color = "#1f77b4"
+    mixed_color = "#ff7f0e"
+    bar_width = 0.35
+
+    for idx, metric in enumerate(metrics):
+        row, col = divmod(idx, ncols)
+        ax = axes[row][col]
+
+        s_values = [_resolve_metric(d, metric) for d in standard_data]
+        m_values = [_resolve_metric(d, metric) for d in mixed_data]
+
+        x = list(range(n_groups))
+        x_s = [xi - bar_width / 2 for xi in x]
+        x_m = [xi + bar_width / 2 for xi in x]
+
+        bars_s = ax.bar(x_s, s_values, bar_width, label=standard_label, color=standard_color)
+        bars_m = ax.bar(x_m, m_values, bar_width, label=mixed_label, color=mixed_color)
+
+        for bar, val in zip(bars_s, s_values):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.01,
+                f"{val:{format_str}}",
+                ha="center", va="bottom", fontsize=8,
+            )
+        for bar, val in zip(bars_m, m_values):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.01,
+                f"{val:{format_str}}",
+                ha="center", va="bottom", fontsize=8,
+            )
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(group_labels)
+        ax.set_ylabel(metric_labels.get(metric, metric))
+        ax.set_ylim(0, 1.15)
+        if idx == 0:
+            ax.legend()
+
+    # hide unused subplots
+    for idx in range(n_metrics, nrows * ncols):
+        row, col = divmod(idx, ncols)
+        axes[row][col].set_visible(False)
+
+    if title:
+        fig.suptitle(title, fontsize=14)
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Saved plot to {output_path}")
+
+
+def plot_paper_results(
+    result_files: list[str],
+    metrics: list[str],
+    per_example_fields: dict[str, str],
+    labels: list[str] | None = None,
+    metric_labels: dict[str, str] | None = None,
+    output_path: str = "results/comparison.png",
+    title: str | None = None,
+    n_bootstrap: int = 1000,
+):
+    """Plot grouped bar chart with bootstrap 95% CI error bars for paper results.
+
+    Args:
+        result_files: Paths to result JSON files (one per method, e.g. baseline/rag/gold).
+        metrics: Aggregate metric keys to plot (e.g. ["accuracy", "execution_accuracy"]).
+        per_example_fields: Mapping from aggregate metric key to per-example result field
+            name (e.g. {"accuracy": "match", "execution_accuracy": "execution_match"}).
+        labels: Display labels for each method.
+        metric_labels: Mapping from metric key to display label.
+        output_path: Where to save the figure.
+        title: Chart title.
+        n_bootstrap: Number of bootstrap resamples.
+    """
+    from bootstrap import bootstrap_ci
+
+    labels = labels or [Path(f).stem for f in result_files]
+    metric_labels = metric_labels or {}
+
+    all_data = []
+    for path in result_files:
+        with open(path) as f:
+            all_data.append(json.load(f))
+
+    num_metrics = len(metrics)
+    num_methods = len(result_files)
+    bar_width = 0.8 / num_methods if num_methods > 1 else 0.5
+    colors = ["#4C72B0", "#DD8452", "#55A868"][:num_methods]
+
+    fig, ax = plt.subplots(figsize=(max(6, num_metrics * 3), 5))
+
+    for i, (data, label) in enumerate(zip(all_data, labels)):
+        means = []
+        errors_low = []
+        errors_high = []
+        for m in metrics:
+            field = per_example_fields[m]
+            per_example = [r[field] for r in data["results"] if r.get(field) is not None]
+            stats = bootstrap_ci(per_example, n_bootstrap=n_bootstrap)
+            means.append(stats["mean"])
+            errors_low.append(stats["mean"] - stats["ci_low"])
+            errors_high.append(stats["ci_high"] - stats["mean"])
+
+        if num_methods > 1:
+            x_positions = [
+                j + i * bar_width - (num_methods - 1) * bar_width / 2
+                for j in range(num_metrics)
+            ]
+        else:
+            x_positions = list(range(num_metrics))
+
+        bars = ax.bar(
+            x_positions, means, bar_width,
+            yerr=[errors_low, errors_high],
+            capsize=3,
+            label=label,
+            color=colors[i % len(colors)],
+        )
+
+        for bar, mean in zip(bars, means):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + max(errors_high) * 0.3 + 0.01,
+                f"{mean:.1%}",
+                ha="center", va="bottom", fontsize=9,
+            )
+
+    x_labels = [metric_labels.get(m, m) for m in metrics]
+    ax.set_xticks(range(num_metrics))
+    ax.set_xticklabels(x_labels)
+    ax.set_ylabel("Score")
+    ax.set_ylim(0, 1.15)
+
+    if title:
+        ax.set_title(title)
+    if num_methods > 1:
+        ax.legend()
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Saved plot to {output_path}")
+
+
+def plot_paper_pass_at_k(
+    result_files: list[str],
+    labels: list[str] | None = None,
+    output_path: str = "results/pass_at_k.png",
+    title: str | None = None,
+):
+    """Plot pass@k metrics from multiple result files as a grouped bar chart (no error bars).
+
+    Args:
+        result_files: Paths to result JSON files (one per method).
+        labels: Display labels for each method.
+        output_path: Where to save the figure.
+        title: Chart title.
+    """
+    labels = labels or [Path(f).stem for f in result_files]
+    colors = ["#4C72B0", "#DD8452", "#55A868"][:len(result_files)]
+
+    all_results = []
+    all_k_values = []
+    for path in result_files:
+        with open(path) as f:
+            data = json.load(f)
+        metrics = {k: v for k, v in data.items() if k.startswith("pass@")}
+        all_results.append(metrics)
+        for k in metrics:
+            if k not in all_k_values:
+                all_k_values.append(k)
+
+    all_k_values.sort(key=lambda x: int(x.split("@")[1]))
+
+    num_k = len(all_k_values)
+    num_methods = len(result_files)
+    bar_width = 0.8 / num_methods if num_methods > 1 else 0.5
+
+    fig, ax = plt.subplots(figsize=(max(6, num_k * 2.5), 5))
+
+    for i, (mets, label) in enumerate(zip(all_results, labels)):
+        values = [mets.get(k, 0.0) for k in all_k_values]
+        if num_methods > 1:
+            x_positions = [
+                j + i * bar_width - (num_methods - 1) * bar_width / 2
+                for j in range(num_k)
+            ]
+        else:
+            x_positions = list(range(num_k))
+
+        bars = ax.bar(x_positions, values, bar_width, label=label, color=colors[i % len(colors)])
+
+        for bar, val in zip(bars, values):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.01,
+                f"{val:.1%}",
+                ha="center", va="bottom", fontsize=9,
+            )
+
+    ax.set_xticks(range(num_k))
+    ax.set_xticklabels(all_k_values)
+    ax.set_ylabel("Pass Rate")
+    ax.set_ylim(0, min(1.15, max(
+        v for m in all_results for v in m.values()
+    ) * 1.3 + 0.05))
+
+    if title:
+        ax.set_title(title)
+    if num_methods > 1:
+        ax.legend()
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Saved plot to {output_path}")
+
+
 if __name__ == "__main__":
     fire.Fire({
         "plot_accuracies": plot_accuracies,
@@ -494,4 +772,7 @@ if __name__ == "__main__":
         "plot_bar_chart": plot_bar_chart,
         "plot_stacked_gain": plot_stacked_gain,
         "plot_lines": plot_lines,
+        "plot_paired_comparison": plot_paired_comparison,
+        "plot_paper_results": plot_paper_results,
+        "plot_paper_pass_at_k": plot_paper_pass_at_k,
     })
