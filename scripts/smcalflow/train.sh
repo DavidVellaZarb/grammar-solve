@@ -45,7 +45,7 @@ if model_exists "$HUB_ID"; then
 else
     uv run python src/train.py \
         --model_name "$MODEL_NAME" \
-        --mixed \
+        --mixed_duplicate \
         --train_path "$TRAIN_PATH" \
         --valid_path "$VALID_PATH" \
         --output_dir "outputs/${MODEL_ALIAS}-lora-smcalflow-mixed" \

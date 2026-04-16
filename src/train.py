@@ -1,4 +1,5 @@
 import os
+import random
 from datetime import datetime
 from pathlib import Path
 
@@ -47,20 +48,46 @@ def train(
     hub_model_id: str | None = None,
     include_grammar: bool = True,
     task: str = "program",
-    mixed: bool = False,
+    mixed_duplicate: bool = False,
+    mixed_ratio: float | None = None,
 ):
+    assert not (mixed_duplicate and mixed_ratio is not None), (
+        "--mixed_duplicate and --mixed_ratio are mutually exclusive"
+    )
+    if mixed_ratio is not None:
+        assert 0.0 <= mixed_ratio <= 1.0, (
+            f"--mixed_ratio must be in [0.0, 1.0], got {mixed_ratio}"
+        )
+
     model_alias = model_name.split("/")[-1].lower().removesuffix("-instruct")
     dataset_name = Path(train_path).parent.name
     hf_namespace = os.getenv("HF_NAMESPACE", "")
     hub_repo = hub_model_id or (f"{hf_namespace}/{model_alias}_{dataset_name}" if hf_namespace else None)
 
-    if mixed:
+    def _mixed_ratio_dataset(path: str):
+        ds_with = load_data(path, include_grammar=True, task=task)
+        ds_without = load_data(path, include_grammar=False, task=task)
+        n = len(ds_with)
+        n_without = round(mixed_ratio * n)
+        rng = random.Random(42)
+        idx = list(range(n))
+        rng.shuffle(idx)
+        without_idx = idx[:n_without]
+        with_idx = idx[n_without:]
+        return concatenate_datasets(
+            [ds_with.select(with_idx), ds_without.select(without_idx)]
+        ).shuffle(seed=42)
+
+    if mixed_duplicate:
         train_with = load_data(train_path, include_grammar=True, task=task)
         train_without = load_data(train_path, include_grammar=False, task=task)
         train_ds = concatenate_datasets([train_with, train_without]).shuffle(seed=42)
         valid_with = load_data(valid_path, include_grammar=True, task=task)
         valid_without = load_data(valid_path, include_grammar=False, task=task)
         valid_ds = concatenate_datasets([valid_with, valid_without]).shuffle(seed=42)
+    elif mixed_ratio is not None:
+        train_ds = _mixed_ratio_dataset(train_path)
+        valid_ds = _mixed_ratio_dataset(valid_path)
     else:
         train_ds = load_data(train_path, include_grammar=include_grammar, task=task)
         valid_ds = load_data(valid_path, include_grammar=include_grammar, task=task)
@@ -77,8 +104,10 @@ def train(
         task_type=TaskType.CAUSAL_LM,
     )
 
-    if mixed:
-        run_type = "mixed"
+    if mixed_duplicate:
+        run_type = "mixed_duplicate"
+    elif mixed_ratio is not None:
+        run_type = f"mixed_ratio_{mixed_ratio}"
     elif task == "grammar_program":
         run_type = "grammar_program"
     elif task == "grammar":
