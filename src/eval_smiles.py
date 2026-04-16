@@ -47,7 +47,7 @@ def evaluate(
     adapter: str,
     test_path: str = "data/smiles/test.json",
     model_name: str | None = None,
-    batch_size: int = 8,
+    batch_size: int = 32,
     max_new_tokens: int = 512,
     output_path: str | None = None,
     attn_implementation: str = "flash_attention_2",
@@ -110,7 +110,7 @@ def evaluate(
         batch_prompts = prompts[i : i + batch_size]
 
         inputs = tokenizer(
-            batch_prompts, return_tensors="pt", padding=True, truncation=True
+            batch_prompts, return_tensors="pt", padding=True, truncation=True, max_length=1024
         ).to(model.device)
 
         with torch.no_grad():
