@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODEL_NAME=$1
-MODEL_ALIAS=$2
+MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct"
+MODEL_ALIAS="llama-3.1-8b"
 
 model_exists() {
     uv run python -c "from huggingface_hub import repo_exists; print(repo_exists('$1', repo_type='model'))" 2>/dev/null | grep -q "True"
