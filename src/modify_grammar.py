@@ -71,13 +71,15 @@ def add_alternative(
     minimal_rules: dict[str, list[str]],
     lark_rules: dict[str, list[str]],
     rng: random.Random,
+    touched_rules: set[str] | None = None,
 ) -> dict:
     minimal_set = {(rule, alt) for rule, alts in minimal_rules.items() for alt in alts}
+    skip = touched_rules or set()
     candidates = [
         (rule, alt)
         for rule, alts in lark_rules.items()
         for alt in alts
-        if (rule, alt) not in minimal_set
+        if (rule, alt) not in minimal_set and rule not in skip
     ]
     if not candidates:
         raise ValueError("No candidates available to add")
@@ -93,8 +95,10 @@ def add_alternative(
 def remove_alternative(
     minimal_rules: dict[str, list[str]],
     rng: random.Random,
+    touched_rules: set[str] | None = None,
 ) -> dict:
-    eligible = [r for r in minimal_rules if r not in PROTECTED_RULES]
+    skip = touched_rules or set()
+    eligible = [r for r in minimal_rules if r not in PROTECTED_RULES and r not in skip]
     if not eligible:
         raise ValueError("No eligible rules available to remove from")
 
@@ -131,7 +135,13 @@ def modify_grammar(
             f"(grammar_file must contain 'spice', got '{grammar_file}')"
         )
 
-    if isinstance(n_ops, int) or (
+    basic_ops = {"add", "remove"}
+    random_choice_mode = len(operations) > 1 and ops.issubset(basic_ops)
+
+    if random_choice_mode:
+        shared_range = _parse_ops_range(n_ops, "n_ops")
+        op_ranges: dict[str, tuple[int, int]] = {}
+    elif isinstance(n_ops, int) or (
         isinstance(n_ops, list)
         and len(n_ops) == 2
         and all(isinstance(x, int) for x in n_ops)
@@ -176,48 +186,69 @@ def modify_grammar(
     for idx in indices:
         example = data[idx]
         minimal_rules = parse_minimal_grammar(example["minimal_grammar"])
+        touched: set[str] = set()
 
-        for op in op_list:
-            n = rng.randrange(*op_ranges[op])
-
-            if op == "add":
-                for _ in range(n):
-                    try:
-                        result = add_alternative(minimal_rules, lark_rules, rng)
+        if random_choice_mode:
+            n_total = rng.randrange(*shared_range)
+            for _ in range(n_total):
+                op = rng.choice(operations)
+                try:
+                    if op == "add":
+                        result = add_alternative(minimal_rules, lark_rules, rng, touched)
                         example["modifications"]["added"].append(result)
-                    except ValueError:
-                        break
-            elif op == "remove":
-                for _ in range(n):
-                    try:
-                        result = remove_alternative(minimal_rules, rng)
+                    else:
+                        result = remove_alternative(minimal_rules, rng, touched)
                         example["modifications"]["removed"].append(result)
-                    except ValueError:
-                        break
-            elif op == "add_remove":
-                n_add = rng.randrange(*op_ranges[op])
-                n_remove = rng.randrange(*op_ranges[op])
-                for _ in range(n_add):
-                    try:
-                        result = add_alternative(minimal_rules, lark_rules, rng)
-                        example["modifications"]["added"].append(result)
-                    except ValueError:
-                        break
-                for _ in range(n_remove):
-                    try:
-                        result = remove_alternative(minimal_rules, rng)
-                        example["modifications"]["removed"].append(result)
-                    except ValueError:
-                        break
-            elif op == "add_specific":
-                for _ in range(n):
-                    try:
-                        result = add_specific_alternative(minimal_rules, pool, rng)
-                        example["modifications"]["added"].append(result)
-                    except ValueError:
-                        break
+                    touched.add(result["rule"])
+                    stats[op] += 1
+                except ValueError:
+                    break
+        else:
+            for op in op_list:
+                n = rng.randrange(*op_ranges[op])
 
-            stats[op] += 1
+                if op == "add":
+                    for _ in range(n):
+                        try:
+                            result = add_alternative(minimal_rules, lark_rules, rng, touched)
+                            example["modifications"]["added"].append(result)
+                            touched.add(result["rule"])
+                        except ValueError:
+                            break
+                elif op == "remove":
+                    for _ in range(n):
+                        try:
+                            result = remove_alternative(minimal_rules, rng, touched)
+                            example["modifications"]["removed"].append(result)
+                            touched.add(result["rule"])
+                        except ValueError:
+                            break
+                elif op == "add_remove":
+                    n_add = rng.randrange(*op_ranges[op])
+                    n_remove = rng.randrange(*op_ranges[op])
+                    for _ in range(n_add):
+                        try:
+                            result = add_alternative(minimal_rules, lark_rules, rng, touched)
+                            example["modifications"]["added"].append(result)
+                            touched.add(result["rule"])
+                        except ValueError:
+                            break
+                    for _ in range(n_remove):
+                        try:
+                            result = remove_alternative(minimal_rules, rng, touched)
+                            example["modifications"]["removed"].append(result)
+                            touched.add(result["rule"])
+                        except ValueError:
+                            break
+                elif op == "add_specific":
+                    for _ in range(n):
+                        try:
+                            result = add_specific_alternative(minimal_rules, pool, rng)
+                            example["modifications"]["added"].append(result)
+                        except ValueError:
+                            break
+
+                stats[op] += 1
 
         example["minimal_grammar"] = reconstruct_minimal_grammar(minimal_rules)
 
