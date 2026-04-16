@@ -14,6 +14,13 @@ uv run python src/eval_spice.py \
     --noinclude_grammar \
     --output_path "${RESULT_DIR}/baseline.json"
 
+echo "=== Ours (no grammar) ==="
+uv run python src/eval_spice.py \
+    --adapter "${HF_NAMESPACE}/${MODEL_ALIAS}_spice-mixed" \
+    --test_path data/spice/test.json \
+    --noinclude_grammar \
+    --output_path "${RESULT_DIR}/no_grammar.json"
+
 echo "=== Ours (mixed + RAG grammar) ==="
 uv run python src/eval_spice.py \
     --adapter "${HF_NAMESPACE}/${MODEL_ALIAS}_spice-mixed" \
@@ -31,8 +38,8 @@ uv run python src/eval_spice.py \
 
 echo "=== Plotting ==="
 uv run python src/plot.py plot_paper_results \
-    --result_files "[\"${RESULT_DIR}/baseline.json\", \"${RESULT_DIR}/rag.json\", \"${RESULT_DIR}/gold.json\"]" \
-    --labels '["Baseline", "Ours (RAG)", "Gold Grammar"]' \
+    --result_files "[\"${RESULT_DIR}/baseline.json\", \"${RESULT_DIR}/no_grammar.json\", \"${RESULT_DIR}/rag.json\", \"${RESULT_DIR}/gold.json\"]" \
+    --labels '["Baseline", "Ours (No Grammar)", "Ours (RAG)", "Gold Grammar"]' \
     --metrics '["ged_similarity", "component_f1"]' \
     --metric_labels '{"ged_similarity": "GED Similarity", "component_f1": "Component F1"}' \
     --per_example_fields '{"ged_similarity": "ged_similarity", "component_f1": "component_f1"}' \

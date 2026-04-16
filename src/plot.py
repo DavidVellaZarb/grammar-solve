@@ -631,7 +631,7 @@ def plot_paper_results(
     num_metrics = len(metrics)
     num_methods = len(result_files)
     bar_width = 0.8 / num_methods if num_methods > 1 else 0.5
-    colors = ["#4C72B0", "#DD8452", "#55A868"][:num_methods]
+    colors = ["#4C72B0", "#8172B3", "#DD8452", "#55A868"][:num_methods]
 
     fig, ax = plt.subplots(figsize=(max(6, num_metrics * 3), 5))
 
@@ -704,7 +704,7 @@ def plot_paper_pass_at_k(
         title: Chart title.
     """
     labels = labels or [Path(f).stem for f in result_files]
-    colors = ["#4C72B0", "#DD8452", "#55A868"][:len(result_files)]
+    colors = ["#4C72B0", "#8172B3", "#DD8452", "#55A868"][:len(result_files)]
 
     all_results = []
     all_k_values = []
