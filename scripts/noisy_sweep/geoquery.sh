@@ -109,7 +109,7 @@ for PROP in 0.1 0.2 0.3; do
         --labels "$LABELS" \
         --metrics '["accuracy", "execution_accuracy"]' \
         --metric_labels '{"accuracy": "Exact Match", "execution_accuracy": "Execution Accuracy"}' \
-        --per_example_fields '{"accuracy": "match", "execution_accuracy": "execution_match"}' \
+        --per_example_fields '{"accuracy": "exact_match", "execution_accuracy": "execution_match"}' \
         --output_path "${RESULT_DIR}/comparison_p${PROP}.png" \
         --title "GeoQuery noisy-sweep (${MODEL_ALIAS}), proportion=${PROP}"
 done
