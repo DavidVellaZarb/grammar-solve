@@ -46,6 +46,6 @@ uv run python src/plot.py plot_paper_results \
     --labels '["r=0.0", "r=0.1", "r=0.2", "r=0.3", "r=0.4", "r=0.5"]' \
     --metrics '["accuracy", "execution_accuracy"]' \
     --metric_labels '{"accuracy": "Exact Match", "execution_accuracy": "Execution Accuracy"}' \
-    --per_example_fields '{"accuracy": "match", "execution_accuracy": "execution_match"}' \
+    --per_example_fields '{"accuracy": "exact_match", "execution_accuracy": "execution_match"}' \
     --output_path "${RESULT_DIR}/comparison.png" \
     --title "Overnight-Blocks mixed-ratio sweep"
