@@ -1,4 +1,5 @@
 import json
+import re
 
 import fire
 import torch
@@ -109,7 +110,9 @@ def evaluate(
         gold = ex["program"]
         pred_program = extract_program(pred)
 
-        exact_match = gold in pred
+        gold_tokens = " ".join(re.findall(r'[a-zA-Z0-9_.]+|[^\s]', gold))
+        pred_tokens = " ".join(re.findall(r'[a-zA-Z0-9_.]+|[^\s]', pred))
+        exact_match = gold_tokens in pred_tokens
 
         gold_denorm = denormalize_lf(gold)
         gold_result = execute([gold_denorm])[0]
