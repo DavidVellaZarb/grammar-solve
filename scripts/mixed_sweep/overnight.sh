@@ -14,7 +14,7 @@ model_exists() {
     uv run python -c "from huggingface_hub import repo_exists; print(repo_exists('$1', repo_type='model'))" 2>/dev/null | grep -q "True"
 }
 
-for RATIO in 0.0 0.1 0.2 0.3; do
+for RATIO in 0.0 0.1 0.2 0.3 0.4 0.5; do
     HUB_ID="${HF_NAMESPACE}/${MODEL_ALIAS}_overnight-mixed-r${RATIO}"
 
     if model_exists "$HUB_ID"; then
@@ -42,8 +42,8 @@ done
 
 echo "=== Plotting ==="
 uv run python src/plot.py plot_paper_results \
-    --result_files "[\"${RESULT_DIR}/rag_r0.0.json\", \"${RESULT_DIR}/rag_r0.1.json\", \"${RESULT_DIR}/rag_r0.2.json\", \"${RESULT_DIR}/rag_r0.3.json\"]" \
-    --labels '["r=0.0", "r=0.1", "r=0.2", "r=0.3"]' \
+    --result_files "[\"${RESULT_DIR}/rag_r0.0.json\", \"${RESULT_DIR}/rag_r0.1.json\", \"${RESULT_DIR}/rag_r0.2.json\", \"${RESULT_DIR}/rag_r0.3.json\", \"${RESULT_DIR}/rag_r0.4.json\", \"${RESULT_DIR}/rag_r0.5.json\"]" \
+    --labels '["r=0.0", "r=0.1", "r=0.2", "r=0.3", "r=0.4", "r=0.5"]' \
     --metrics '["accuracy", "execution_accuracy"]' \
     --metric_labels '{"accuracy": "Exact Match", "execution_accuracy": "Execution Accuracy"}' \
     --per_example_fields '{"accuracy": "match", "execution_accuracy": "execution_match"}' \
