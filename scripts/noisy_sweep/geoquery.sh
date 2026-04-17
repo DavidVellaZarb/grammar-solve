@@ -42,54 +42,52 @@ uv run python src/eval_geoquery.py \
     --grammar_file "$RAG_FILE" \
     --output_path "${RESULT_DIR}/${BASE_TAG}.json"
 
-for OP in add remove; do
-    for RANGE in "2 5" "3 6" "4 7"; do
-        set -- $RANGE
-        LO=$1; HI=$2
-        for PROP in 0.1 0.2 0.3; do
-            TAG="${OP}-r${LO}_${HI}-p${PROP}"
-            NOISY_TRAIN="${NOISY_DATA_DIR}/train_${TAG}.json"
-            NOISY_VALID="${NOISY_DATA_DIR}/valid_${TAG}.json"
-            HUB_ID="${HF_NAMESPACE}/${MODEL_ALIAS}_geoquery-noisy-${TAG}"
+for RANGE in "2 5" "3 6" "4 7"; do
+    set -- $RANGE
+    LO=$1; HI=$2
+    for PROP in 0.1 0.2 0.3; do
+        TAG="r${LO}_${HI}-p${PROP}"
+        NOISY_TRAIN="${NOISY_DATA_DIR}/train_${TAG}.json"
+        NOISY_VALID="${NOISY_DATA_DIR}/valid_${TAG}.json"
+        HUB_ID="${HF_NAMESPACE}/${MODEL_ALIAS}_geoquery-noisy-${TAG}"
 
-            uv run python src/modify_grammar.py \
-                --input_path "$TRAIN_PATH" \
-                --output_path "$NOISY_TRAIN" \
-                --operations "[\"${OP}\"]" \
-                --proportion "$PROP" \
-                --n_ops "[${LO}, ${HI}]" \
-                --grammar_file "$GRAMMAR_FILE" \
-                --seed "$SEED"
-            uv run python src/modify_grammar.py \
-                --input_path "$VALID_PATH" \
-                --output_path "$NOISY_VALID" \
-                --operations "[\"${OP}\"]" \
-                --proportion "$PROP" \
-                --n_ops "[${LO}, ${HI}]" \
-                --grammar_file "$GRAMMAR_FILE" \
-                --seed "$SEED"
+        uv run python src/modify_grammar.py \
+            --input_path "$TRAIN_PATH" \
+            --output_path "$NOISY_TRAIN" \
+            --operations '["add", "remove"]' \
+            --proportion "$PROP" \
+            --n_ops "[${LO}, ${HI}]" \
+            --grammar_file "$GRAMMAR_FILE" \
+            --seed "$SEED"
+        uv run python src/modify_grammar.py \
+            --input_path "$VALID_PATH" \
+            --output_path "$NOISY_VALID" \
+            --operations '["add", "remove"]' \
+            --proportion "$PROP" \
+            --n_ops "[${LO}, ${HI}]" \
+            --grammar_file "$GRAMMAR_FILE" \
+            --seed "$SEED"
 
-            if model_exists "$HUB_ID"; then
-                echo "SKIP $HUB_ID (exists)"
-            else
-                echo "=== Train ${TAG} ==="
-                uv run python src/train.py \
-                    --model_name "$MODEL_NAME" \
-                    --num_train_epochs 1 \
-                    --train_path "$NOISY_TRAIN" \
-                    --valid_path "$NOISY_VALID" \
-                    --output_dir "outputs/${MODEL_ALIAS}-lora-geoquery-noisy-${TAG}" \
-                    --hub_model_id "$HUB_ID"
-            fi
+        if model_exists "$HUB_ID"; then
+            echo "SKIP $HUB_ID (exists)"
+        else
+            echo "=== Train ${TAG} ==="
+            uv run python src/train.py \
+                --model_name "$MODEL_NAME" \
+                --num_train_epochs 1 \
+                --train_path "$NOISY_TRAIN" \
+                --valid_path "$NOISY_VALID" \
+                --output_dir "outputs/${MODEL_ALIAS}-lora-geoquery-noisy-${TAG}" \
+                --hub_model_id "$HUB_ID"
+        fi
 
-            echo "=== Eval ${TAG} (RAG grammar) ==="
-            uv run python src/eval_geoquery.py \
-                --adapter "$HUB_ID" \
-                --test_path "$TEST_PATH" \
-                --include_grammar \
-                --grammar_file "$RAG_FILE" \
-                --output_path "${RESULT_DIR}/${TAG}.json"
-        done
+        echo "=== Eval ${TAG} (RAG grammar) ==="
+        uv run python src/eval_geoquery.py \
+            --adapter "$HUB_ID" \
+            --test_path "$TEST_PATH" \
+            --include_grammar \
+            --grammar_file "$RAG_FILE" \
+            --output_path "${RESULT_DIR}/${TAG}.json"
     done
 done
 
@@ -97,13 +95,11 @@ echo "=== Plotting ==="
 for PROP in 0.1 0.2 0.3; do
     FILES="[\"${RESULT_DIR}/p0.0.json\""
     LABELS='["Gold (p=0.0)"'
-    for OP in add remove; do
-        for RANGE in "2 5" "3 6" "4 7"; do
-            set -- $RANGE
-            LO=$1; HI=$2
-            FILES="${FILES}, \"${RESULT_DIR}/${OP}-r${LO}_${HI}-p${PROP}.json\""
-            LABELS="${LABELS}, \"${OP} [${LO},${HI})\""
-        done
+    for RANGE in "2 5" "3 6" "4 7"; do
+        set -- $RANGE
+        LO=$1; HI=$2
+        FILES="${FILES}, \"${RESULT_DIR}/r${LO}_${HI}-p${PROP}.json\""
+        LABELS="${LABELS}, \"[${LO},${HI})\""
     done
     FILES="${FILES}]"
     LABELS="${LABELS}]"
