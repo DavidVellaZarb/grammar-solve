@@ -8,7 +8,7 @@ TRAIN_PATH=data/overnight/train.json
 VALID_PATH=data/overnight/valid.json
 TEST_PATH=data/overnight/test.json
 RAG_FILE=outputs/predicted_grammars/rag_cot/overnight_test_k64.json
-RESULT_DIR="results/overnight/${MODEL_ALIAS}/mixed_sweep"
+RESULT_DIR="results/mixed_sweep/overnight"
 
 model_exists() {
     uv run python -c "from huggingface_hub import repo_exists; print(repo_exists('$1', repo_type='model'))" 2>/dev/null | grep -q "True"
@@ -48,4 +48,4 @@ uv run python src/plot.py plot_paper_results \
     --metric_labels '{"accuracy": "Exact Match", "execution_accuracy": "Execution Accuracy"}' \
     --per_example_fields '{"accuracy": "match", "execution_accuracy": "execution_match"}' \
     --output_path "${RESULT_DIR}/comparison.png" \
-    --title "Overnight-Blocks mixed-ratio sweep (${MODEL_ALIAS})"
+    --title "Overnight-Blocks mixed-ratio sweep"
