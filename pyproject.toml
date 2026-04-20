@@ -31,6 +31,7 @@ dependencies = [
     "transformers-cfg>=0.2",
     "pyperplan>=2.1",
     "pyswip>=0.2",
+    "torchvision>=0.25.0",
 ]
 
 [tool.pytest.ini_options]
