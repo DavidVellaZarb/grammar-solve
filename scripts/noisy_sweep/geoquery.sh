@@ -4,10 +4,6 @@ set -euo pipefail
 MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct"
 MODEL_ALIAS="llama-3.1-8b"
 
-model_exists() {
-    uv run python -c "from huggingface_hub import repo_exists; print(repo_exists('$1', repo_type='model'))" 2>/dev/null | grep -q "True"
-}
-
 TRAIN_PATH=data/geoquery/train.json
 VALID_PATH=data/geoquery/valid.json
 TEST_PATH=data/geoquery/test.json
@@ -21,18 +17,14 @@ mkdir -p "$NOISY_DATA_DIR" "$RESULT_DIR"
 
 BASE_TAG="p0.0"
 BASE_HUB="${HF_NAMESPACE}/${MODEL_ALIAS}_geoquery-noisy-${BASE_TAG}"
-if model_exists "$BASE_HUB"; then
-    echo "SKIP $BASE_HUB (exists)"
-else
-    echo "=== Train baseline (unmodified gold) ==="
-    uv run python src/train.py \
-        --model_name "$MODEL_NAME" \
-        --num_train_epochs 1 \
-        --train_path "$TRAIN_PATH" \
-        --valid_path "$VALID_PATH" \
-        --output_dir "outputs/${MODEL_ALIAS}-lora-geoquery-noisy-${BASE_TAG}" \
-        --hub_model_id "$BASE_HUB"
-fi
+echo "=== Train baseline (unmodified gold) ==="
+uv run python src/train.py \
+    --model_name "$MODEL_NAME" \
+    --num_train_epochs 1 \
+    --train_path "$TRAIN_PATH" \
+    --valid_path "$VALID_PATH" \
+    --output_dir "outputs/${MODEL_ALIAS}-lora-geoquery-noisy-${BASE_TAG}" \
+    --hub_model_id "$BASE_HUB"
 
 echo "=== Eval baseline (RAG grammar) ==="
 uv run python src/eval_geoquery.py \
@@ -68,18 +60,14 @@ for RANGE in "2 5" "3 6" "4 7"; do
             --grammar_file "$GRAMMAR_FILE" \
             --seed "$SEED"
 
-        if model_exists "$HUB_ID"; then
-            echo "SKIP $HUB_ID (exists)"
-        else
-            echo "=== Train ${TAG} ==="
-            uv run python src/train.py \
-                --model_name "$MODEL_NAME" \
-                --num_train_epochs 1 \
-                --train_path "$NOISY_TRAIN" \
-                --valid_path "$NOISY_VALID" \
-                --output_dir "outputs/${MODEL_ALIAS}-lora-geoquery-noisy-${TAG}" \
-                --hub_model_id "$HUB_ID"
-        fi
+        echo "=== Train ${TAG} ==="
+        uv run python src/train.py \
+            --model_name "$MODEL_NAME" \
+            --num_train_epochs 1 \
+            --train_path "$NOISY_TRAIN" \
+            --valid_path "$NOISY_VALID" \
+            --output_dir "outputs/${MODEL_ALIAS}-lora-geoquery-noisy-${TAG}" \
+            --hub_model_id "$HUB_ID"
 
         echo "=== Eval ${TAG} (RAG grammar) ==="
         uv run python src/eval_geoquery.py \

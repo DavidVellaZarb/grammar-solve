@@ -4,10 +4,6 @@ set -euo pipefail
 MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct"
 MODEL_ALIAS="llama-3.1-8b"
 
-model_exists() {
-    uv run python -c "from huggingface_hub import repo_exists; print(repo_exists('$1', repo_type='model'))" 2>/dev/null | grep -q "True"
-}
-
 TRAIN_PATH=data/geoquery/train.json
 VALID_PATH=data/geoquery/valid.json
 TEST_PATH=data/geoquery/test.json
@@ -17,19 +13,15 @@ RESULT_DIR="results/mixed_sweep/geoquery"
 for RATIO in 0.0 0.1 0.2 0.3 0.4 0.5; do
     HUB_ID="${HF_NAMESPACE}/${MODEL_ALIAS}_geoquery-mixed-r${RATIO}"
 
-    if model_exists "$HUB_ID"; then
-        echo "SKIP $HUB_ID (exists)"
-    else
-        echo "=== Train ratio=${RATIO} ==="
-        uv run python src/train.py \
-            --model_name "$MODEL_NAME" \
-            --mixed_ratio "$RATIO" \
-            --num_train_epochs 1 \
-            --train_path "$TRAIN_PATH" \
-            --valid_path "$VALID_PATH" \
-            --output_dir "outputs/${MODEL_ALIAS}-lora-geoquery-mixed-r${RATIO}" \
-            --hub_model_id "$HUB_ID"
-    fi
+    echo "=== Train ratio=${RATIO} ==="
+    uv run python src/train.py \
+        --model_name "$MODEL_NAME" \
+        --mixed_ratio "$RATIO" \
+        --num_train_epochs 1 \
+        --train_path "$TRAIN_PATH" \
+        --valid_path "$VALID_PATH" \
+        --output_dir "outputs/${MODEL_ALIAS}-lora-geoquery-mixed-r${RATIO}" \
+        --hub_model_id "$HUB_ID"
 
     echo "=== Eval ratio=${RATIO} (RAG grammar) ==="
     uv run python src/eval_geoquery.py \

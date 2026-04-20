@@ -111,6 +111,11 @@ def train(
         train_ds = load_data(train_path, include_grammar=include_grammar, task=task)
         valid_ds = load_data(valid_path, include_grammar=include_grammar, task=task)
 
+    if "qwen3" in model_name.lower():
+        chat_template_kwargs = {"enable_thinking": False}
+        train_ds = train_ds.map(lambda ex: {**ex, "chat_template_kwargs": chat_template_kwargs})
+        valid_ds = valid_ds.map(lambda ex: {**ex, "chat_template_kwargs": chat_template_kwargs})
+
     processing_class = load_processor(model_name)
     tokenizer = get_tokenizer(processing_class)
     if tokenizer.pad_token is None:

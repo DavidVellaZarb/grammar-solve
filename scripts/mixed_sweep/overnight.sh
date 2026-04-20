@@ -10,26 +10,18 @@ TEST_PATH=data/overnight/test.json
 RAG_FILE=outputs/predicted_grammars/rag_cot/overnight_test_k64.json
 RESULT_DIR="results/mixed_sweep/overnight"
 
-model_exists() {
-    uv run python -c "from huggingface_hub import repo_exists; print(repo_exists('$1', repo_type='model'))" 2>/dev/null | grep -q "True"
-}
-
 for RATIO in 0.0 0.1 0.2 0.3 0.4 0.5; do
     HUB_ID="${HF_NAMESPACE}/${MODEL_ALIAS}_overnight-mixed-r${RATIO}"
 
-    if model_exists "$HUB_ID"; then
-        echo "SKIP $HUB_ID (exists)"
-    else
-        echo "=== Train ratio=${RATIO} ==="
-        uv run python src/train.py \
-            --model_name "$MODEL_NAME" \
-            --mixed_ratio "$RATIO" \
-            --num_train_epochs 1 \
-            --train_path "$TRAIN_PATH" \
-            --valid_path "$VALID_PATH" \
-            --output_dir "outputs/${MODEL_ALIAS}-lora-overnight-mixed-r${RATIO}" \
-            --hub_model_id "$HUB_ID"
-    fi
+    echo "=== Train ratio=${RATIO} ==="
+    uv run python src/train.py \
+        --model_name "$MODEL_NAME" \
+        --mixed_ratio "$RATIO" \
+        --num_train_epochs 1 \
+        --train_path "$TRAIN_PATH" \
+        --valid_path "$VALID_PATH" \
+        --output_dir "outputs/${MODEL_ALIAS}-lora-overnight-mixed-r${RATIO}" \
+        --hub_model_id "$HUB_ID"
 
     echo "=== Eval ratio=${RATIO} (RAG grammar) ==="
     uv run python src/eval_overnight.py \
