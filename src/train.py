@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 import fire
+import torch
 import wandb
 from dotenv import load_dotenv
 from peft import LoraConfig, TaskType
@@ -12,9 +13,23 @@ from trl.trainer.sft_config import SFTConfig
 from trl.trainer.sft_trainer import SFTTrainer
 
 from datasets import concatenate_datasets
+from transformers import AutoConfig
 
 from data import load_data
 from model_loading import get_tokenizer, is_vlm, load_base_model, load_processor
+
+
+_NEEDS_MM_TOKEN_TYPE_IDS = {"gemma4"}
+
+
+class _Gemma4DataCollator:
+    def __init__(self, base_collator):
+        self.base_collator = base_collator
+
+    def __call__(self, features):
+        batch = self.base_collator(features)
+        batch["mm_token_type_ids"] = torch.zeros_like(batch["input_ids"])
+        return batch
 
 load_dotenv()
 
@@ -101,6 +116,10 @@ def train(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    model_type = AutoConfig.from_pretrained(model_name, trust_remote_code=True).model_type
+    if model_type in _NEEDS_MM_TOKEN_TYPE_IDS and attn_implementation == "flash_attention_2":
+        attn_implementation = "sdpa"
+
     vlm = is_vlm(model_name)
     sft_model = (
         load_base_model(model_name, attn_implementation=attn_implementation)
@@ -152,8 +171,6 @@ def train(
         save_total_limit=save_total_limit,
         report_to=report_to,
         logging_steps=logging_steps,
-        push_to_hub=push_to_hub,
-        hub_model_id=hub_repo,
         model_init_kwargs=None if vlm else {
             "torch_dtype": "bfloat16",
             "attn_implementation": attn_implementation,
@@ -168,6 +185,8 @@ def train(
         processing_class=processing_class,
         peft_config=lora_config,
     )
+    if model_type in _NEEDS_MM_TOKEN_TYPE_IDS:
+        trainer.data_collator = _Gemma4DataCollator(trainer.data_collator)
 
     trainer.train()
     trainer.save_model()
