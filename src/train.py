@@ -16,7 +16,13 @@ from datasets import concatenate_datasets
 from transformers import AutoConfig
 
 from data import load_data
-from model_loading import get_tokenizer, is_vlm, load_base_model, load_processor
+from model_loading import (
+    get_tokenizer,
+    is_vlm,
+    load_base_model,
+    load_processor,
+    _NEEDS_THOUGHT_CHANNEL_PREFIX,
+)
 
 
 _NEEDS_MM_TOKEN_TYPE_IDS = {"gemma4"}
@@ -116,14 +122,35 @@ def train(
         train_ds = train_ds.map(lambda ex: {**ex, "chat_template_kwargs": chat_template_kwargs})
         valid_ds = valid_ds.map(lambda ex: {**ex, "chat_template_kwargs": chat_template_kwargs})
 
+    model_type = AutoConfig.from_pretrained(model_name, trust_remote_code=True).model_type
+
     processing_class = load_processor(model_name)
     tokenizer = get_tokenizer(processing_class)
+
+    if model_type in _NEEDS_THOUGHT_CHANNEL_PREFIX:
+        # The Gemma-4 template calls strip_thinking() on model message content, which strips
+        # any <|channel>thought...<channel|> tokens. It also adds <|channel>thought\n<channel|>
+        # to the generation prompt (add_generation_prompt=True) but NOT to the full conversation
+        # format. This causes a train/inference mismatch: TRL masks tokens up to the generation
+        # prompt length (including the thought channel), but those tokens aren't in the full
+        # sequence, so answer( gets masked and the model learns to skip it.
+        #
+        # Fix: patch the processor's Jinja template (NOT tokenizer.chat_template — they are
+        # separate objects; TRL uses processing_class.apply_chat_template which reads
+        # processing_class.chat_template) to emit <|channel>thought\n<channel|> before each
+        # model message in the full conversation format, matching the generation prompt.
+        # Two paths: string content (message['content']) and structured sequence content
+        # (item['text']). TRL's prepare_multimodal_messages always converts to structured
+        # format, so the sequence path is what actually runs during training. Patch both.
+        processing_class.chat_template = processing_class.chat_template.replace(
+            "{{- strip_thinking(message['content']) -}}",
+            "{{- '<|channel>thought\\n<channel|>' + strip_thinking(message['content']) -}}",
+        ).replace(
+            "{{- strip_thinking(item['text']) -}}",
+            "{{- '<|channel>thought\\n<channel|>' + strip_thinking(item['text']) -}}",
+        )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-
-    model_type = AutoConfig.from_pretrained(model_name, trust_remote_code=True).model_type
-    if model_type in _NEEDS_MM_TOKEN_TYPE_IDS and attn_implementation == "flash_attention_2":
-        attn_implementation = "sdpa"
 
     vlm = is_vlm(model_name)
     sft_model = (
@@ -158,6 +185,7 @@ def train(
 
     sft_config = SFTConfig(
         output_dir=output_dir,
+        hub_model_id=hub_repo,
         run_name=run_name,
         num_train_epochs=num_train_epochs,
         max_steps=max_steps,

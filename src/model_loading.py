@@ -8,6 +8,13 @@ from transformers import (
 )
 
 
+# flash_attention_2 only supports head_dim <= 256; these models exceed that
+_NO_FLASH_ATTN = {"gemma4", "gemma4_text"}
+
+# These models inject <|channel>thought\n<channel|> into the generation prompt;
+# training data must include it so the token boundary aligns with inference
+_NEEDS_THOUGHT_CHANNEL_PREFIX = {"gemma4", "gemma4_text"}
+
 _VLM_MODEL_TYPES = {
     "qwen2_vl",
     "qwen2_5_vl",
@@ -49,7 +56,12 @@ def load_base_model(
             "No CUDA device found. Refusing to run inference on CPU. "
             "Set CUDA_VISIBLE_DEVICES or run on a GPU machine."
         )
-    model_cls = AutoModelForImageTextToText if is_vlm(model_name) else AutoModelForCausalLM
+    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+    model_type = getattr(config, "model_type", None)
+    if model_type in _NO_FLASH_ATTN and attn_implementation == "flash_attention_2":
+        attn_implementation = "sdpa"
+    vlm = model_type in _VLM_MODEL_TYPES or hasattr(config, "vision_config")
+    model_cls = AutoModelForImageTextToText if vlm else AutoModelForCausalLM
     return model_cls.from_pretrained(
         model_name,
         torch_dtype=torch_dtype,
