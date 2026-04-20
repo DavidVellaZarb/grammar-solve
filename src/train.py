@@ -1,5 +1,6 @@
 import os
 import random
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -50,10 +51,13 @@ def train(
     task: str = "program",
     mixed_duplicate: bool = False,
     mixed_ratio: float | None = None,
+    save_locally: bool = True,
 ):
     assert not (mixed_duplicate and mixed_ratio is not None), (
         "--mixed_duplicate and --mixed_ratio are mutually exclusive"
     )
+    if not save_locally:
+        assert push_to_hub, "--nosave_locally requires --push_to_hub"
     if mixed_ratio is not None:
         assert 0.0 <= mixed_ratio <= 1.0, (
             f"--mixed_ratio must be in [0.0, 1.0], got {mixed_ratio}"
@@ -143,6 +147,7 @@ def train(
         gradient_checkpointing=gradient_checkpointing,
         eval_strategy=eval_strategy,
         eval_steps=eval_steps,
+        save_strategy="steps" if save_locally else "no",
         save_steps=save_steps,
         save_total_limit=save_total_limit,
         report_to=report_to,
@@ -170,6 +175,8 @@ def train(
     if push_to_hub and hub_repo:
         trainer.push_to_hub()
         processing_class.push_to_hub(hub_repo)
+        if not save_locally:
+            shutil.rmtree(output_dir, ignore_errors=True)
 
     if report_to == "wandb":
         wandb.finish()

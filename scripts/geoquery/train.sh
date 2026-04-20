@@ -3,6 +3,7 @@ set -euo pipefail
 
 MODEL_NAME=$1
 MODEL_ALIAS=$2
+shift 2
 
 model_exists() {
     uv run python -c "from huggingface_hub import repo_exists; print(repo_exists('$1', repo_type='model'))" 2>/dev/null | grep -q "True"
@@ -22,7 +23,8 @@ else
         --train_path "$TRAIN_PATH" \
         --valid_path "$VALID_PATH" \
         --output_dir "outputs/${MODEL_ALIAS}-lora-geoquery-baseline" \
-        --hub_model_id "$HUB_ID"
+        --hub_model_id "$HUB_ID" \
+        "$@"
 fi
 
 HUB_ID="${HF_NAMESPACE}/${MODEL_ALIAS}_geoquery-mixed-r0.1"
@@ -36,5 +38,6 @@ else
         --train_path "$TRAIN_PATH" \
         --valid_path "$VALID_PATH" \
         --output_dir "outputs/${MODEL_ALIAS}-lora-geoquery-mixed-r0.1" \
-        --hub_model_id "$HUB_ID"
+        --hub_model_id "$HUB_ID" \
+        "$@"
 fi

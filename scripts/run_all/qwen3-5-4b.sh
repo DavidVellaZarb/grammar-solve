@@ -13,7 +13,7 @@ fi
 
 for DOMAIN in "${DOMAINS[@]}"; do
     echo "######## TRAIN ${DOMAIN} (${ALIAS}) ########"
-    "${REPO_ROOT}/scripts/${DOMAIN}/${ALIAS}/train.sh" "$@"
+    "${REPO_ROOT}/scripts/${DOMAIN}/${ALIAS}/train.sh" --nosave_locally "$@"
 done
 
 for DOMAIN in "${DOMAINS[@]}"; do
