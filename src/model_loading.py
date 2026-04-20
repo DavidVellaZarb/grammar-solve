@@ -44,6 +44,11 @@ def load_base_model(
     attn_implementation: str = "flash_attention_2",
     device_map="auto",
 ):
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "No CUDA device found. Refusing to run inference on CPU. "
+            "Set CUDA_VISIBLE_DEVICES or run on a GPU machine."
+        )
     model_cls = AutoModelForImageTextToText if is_vlm(model_name) else AutoModelForCausalLM
     return model_cls.from_pretrained(
         model_name,
