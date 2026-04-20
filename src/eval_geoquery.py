@@ -80,7 +80,8 @@ def evaluate(
     for ex in examples:
         messages = format_prompt_messages(ex, include_grammar=include_grammar, task=task)
         text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True,
+            enable_thinking=False,
         )
         prompts.append(text)
 
