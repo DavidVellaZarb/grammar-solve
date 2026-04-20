@@ -19,6 +19,9 @@ def bootstrap_ci(
         Dict with keys: mean, ci_low, ci_high, std.
     """
     arr = np.array(values, dtype=float)
+    arr = arr[~np.isnan(arr)]
+    if len(arr) == 0:
+        return {"mean": 0.0, "ci_low": 0.0, "ci_high": 0.0, "std": 0.0}
     rng = np.random.default_rng(seed)
     means = np.array([
         rng.choice(arr, size=len(arr), replace=True).mean()

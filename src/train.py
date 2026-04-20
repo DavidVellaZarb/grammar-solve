@@ -9,11 +9,11 @@ from dotenv import load_dotenv
 from peft import LoraConfig, TaskType
 from trl.trainer.sft_config import SFTConfig
 from trl.trainer.sft_trainer import SFTTrainer
-from transformers import AutoTokenizer
 
 from datasets import concatenate_datasets
 
 from data import load_data
+from model_loading import get_tokenizer, is_vlm, load_base_model, load_processor
 
 load_dotenv()
 
@@ -92,9 +92,17 @@ def train(
         train_ds = load_data(train_path, include_grammar=include_grammar, task=task)
         valid_ds = load_data(valid_path, include_grammar=include_grammar, task=task)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    processing_class = load_processor(model_name)
+    tokenizer = get_tokenizer(processing_class)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+
+    vlm = is_vlm(model_name)
+    sft_model = (
+        load_base_model(model_name, attn_implementation=attn_implementation)
+        if vlm
+        else model_name
+    )
 
     lora_config = LoraConfig(
         r=lora_r,
@@ -141,18 +149,18 @@ def train(
         logging_steps=logging_steps,
         push_to_hub=push_to_hub,
         hub_model_id=hub_repo,
-        model_init_kwargs={
+        model_init_kwargs=None if vlm else {
             "torch_dtype": "bfloat16",
             "attn_implementation": attn_implementation,
         },
     )
 
     trainer = SFTTrainer(
-        model=model_name,
+        model=sft_model,
         args=sft_config,
         train_dataset=train_ds,
         eval_dataset=valid_ds,
-        processing_class=tokenizer,
+        processing_class=processing_class,
         peft_config=lora_config,
     )
 
@@ -161,7 +169,7 @@ def train(
 
     if push_to_hub and hub_repo:
         trainer.push_to_hub()
-        tokenizer.push_to_hub(hub_repo)
+        processing_class.push_to_hub(hub_repo)
 
     if report_to == "wandb":
         wandb.finish()

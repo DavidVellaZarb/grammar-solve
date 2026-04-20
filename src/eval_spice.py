@@ -12,7 +12,7 @@ import torch
 from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 from peft import PeftConfig, PeftModel
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from model_loading import get_tokenizer, load_base_model, load_processor
 
 from data import format_prompt_messages, load_raw_data
 from eval_utils import save_results
@@ -241,16 +241,12 @@ def evaluate(
     base_model_name = model_name or peft_config.base_model_name_or_path
     assert base_model_name is not None, "No model_name provided and adapter config has no base_model_name_or_path"
 
-    model = AutoModelForCausalLM.from_pretrained(
-        base_model_name,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-        attn_implementation=attn_implementation,
-    )
+    model = load_base_model(base_model_name, attn_implementation=attn_implementation)
     model = PeftModel.from_pretrained(model, adapter)
     model.eval()
 
-    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    processing_class = load_processor(base_model_name)
+    tokenizer = get_tokenizer(processing_class)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"

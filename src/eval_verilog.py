@@ -6,13 +6,13 @@ import fire
 import torch
 from peft import PeftConfig, PeftModel
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from verilog_eval.data import read_problems, write_jsonl
 from verilog_eval.evaluation import evaluate_functional_correctness
 
 from data import format_prompt_messages
 from grammar_parser import extract_minimal_grammar
 from grammar_utils import VERILOG_GENERIC_TERMINALS, extract_grammar_from_output
+from model_loading import get_tokenizer, load_base_model, load_processor
 
 VERILOG_GRAMMAR_PATH = "grammars/verilog.lark"
 VERILOG_SKIP_RULES = {
@@ -83,16 +83,12 @@ def evaluate(
         "No model_name provided and adapter config has no base_model_name_or_path"
     )
 
-    model = AutoModelForCausalLM.from_pretrained(
-        base_model_name,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-        attn_implementation=attn_implementation,
-    )
+    model = load_base_model(base_model_name, attn_implementation=attn_implementation)
     model = PeftModel.from_pretrained(model, adapter)
     model.eval()
 
-    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    processing_class = load_processor(base_model_name)
+    tokenizer = get_tokenizer(processing_class)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
