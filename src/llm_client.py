@@ -33,6 +33,13 @@ class Api(str, Enum):
     anthropic = "anthropic"
 
 
+_ANTHROPIC_NO_TEMPERATURE_PREFIXES = ("claude-opus-4-7",)
+
+
+def _anthropic_supports_temperature(model: str) -> bool:
+    return not model.startswith(_ANTHROPIC_NO_TEMPERATURE_PREFIXES)
+
+
 def cache_key(messages: list[dict], model: str) -> str:
     key_data = {"messages": messages, "model": model}
     serialized = json.dumps(key_data, sort_keys=True)
@@ -150,21 +157,16 @@ class LLMClient:
         client = cast(AsyncAnthropic, self._get_client())
         system, user_messages = _extract_system_and_user_messages(messages)
         typed_messages = cast(list[MessageParam], user_messages)
+        kwargs: dict = {
+            "model": self.model,
+            "messages": typed_messages,
+            "max_tokens": self.max_tokens,
+        }
+        if _anthropic_supports_temperature(self.model):
+            kwargs["temperature"] = self.temperature
         if system:
-            response = await client.messages.create(
-                model=self.model,
-                messages=typed_messages,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-                system=system,
-            )
-        else:
-            response = await client.messages.create(
-                model=self.model,
-                messages=typed_messages,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-            )
+            kwargs["system"] = system
+        response = await client.messages.create(**kwargs)
         text = getattr(response.content[0], "text", None)
         assert text is not None, f"Unexpected content block type: {type(response.content[0])}"
         return text.strip()
@@ -251,9 +253,10 @@ class LLMClient:
             params = {
                 "model": self.model,
                 "max_tokens": self.max_tokens,
-                "temperature": self.temperature,
                 "messages": user_messages,
             }
+            if _anthropic_supports_temperature(self.model):
+                params["temperature"] = self.temperature
             if system:
                 params["system"] = system
             request = {"custom_id": custom_id, "params": params}
@@ -401,10 +404,12 @@ def _check_anthropic(batches_info: list[dict]) -> list[str]:
     for i, bi in enumerate(batches_info):
         batch = client.messages.batches.retrieve(bi["batch_id"])
         status = batch.processing_status
+        counts = batch.request_counts
+        if status == "ended" and counts.succeeded == 0 and counts.errored > 0:
+            status = "failed"
         statuses.append(status)
         prefix = f"  [{i+1}/{len(batches_info)}] {batch.id}"
         print(f"{prefix}: {status}")
-        counts = batch.request_counts
         print(f"    Processing: {counts.processing}, Succeeded: {counts.succeeded}, "
               f"Errored: {counts.errored}, Canceled: {counts.canceled}, Expired: {counts.expired}")
     return statuses
@@ -440,6 +445,7 @@ def _collect_anthropic(
     n_collected = 0
     n_failed = 0
 
+    error_samples: list[str] = []
     for bi in batches_info:
         batch = client.messages.batches.retrieve(bi["batch_id"])
         if batch.processing_status not in ("ended",):
@@ -460,8 +466,15 @@ def _collect_anthropic(
                 else:
                     n_failed += 1
             else:
-                print(f"Failed for {custom_id}: {result.result.type}")
                 n_failed += 1
+                if len(error_samples) < 3:
+                    detail = getattr(result.result, "error", result.result)
+                    error_samples.append(f"{custom_id}: {detail}")
+
+    if error_samples:
+        print(f"First {len(error_samples)} errored requests:")
+        for s in error_samples:
+            print(f"  {s}")
 
     return n_collected, n_failed
 

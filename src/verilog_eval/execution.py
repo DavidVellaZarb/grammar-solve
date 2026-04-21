@@ -113,11 +113,12 @@ def check_correctness(problem: Dict, completion: str, timeout: float,
             shutil.rmtree = rmtree
             os.rmdir = rmdir
             os.chdir = chdir
-            
-    manager = multiprocessing.Manager()
+
+    ctx = multiprocessing.get_context("fork")
+    manager = ctx.Manager()
     result = manager.list()
 
-    p = multiprocessing.Process(target=unsafe_execute)
+    p = ctx.Process(target=unsafe_execute)
     p.start()
     p.join(timeout=timeout + 1)
     if p.is_alive():

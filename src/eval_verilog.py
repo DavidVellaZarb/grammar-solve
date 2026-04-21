@@ -236,5 +236,55 @@ def evaluate(
     print(f"\nResults saved to {output_path}")
 
 
+def evaluate_predictions(
+    predictions_path: str,
+    problem_file: str,
+    output_path: str,
+    k: str | int = "1",
+    n_workers: int = 4,
+    timeout: float = 30.0,
+):
+    """Evaluate predictions JSON (from icl.py) against the Verilog pass@k harness."""
+    with open(predictions_path) as f:
+        preds = json.load(f)["data"]
+
+    k_str = str(k)
+    k_values = [int(x.strip()) for x in k_str.split(",")]
+
+    samples = []
+    for entry in preds:
+        tid = entry["id"]
+        raw = entry.get("extracted_program") or entry.get("raw_prediction") or ""
+        completion = extract_completion(raw)
+        samples.append({"task_id": tid, "completion": completion})
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    samples_path = output_path.replace(".json", "_samples.jsonl")
+    from verilog_eval.data import write_jsonl as _write_jsonl
+    _write_jsonl(samples_path, samples)
+    print(f"Samples written to {samples_path}")
+
+    pass_at_k = evaluate_functional_correctness(
+        samples_path, problem_file, k=k_values,
+        n_workers=n_workers, timeout=timeout,
+    )
+    print("Results:")
+    for metric, value in pass_at_k.items():
+        print(f"  {metric}: {value:.4f}")
+
+    results = {
+        **pass_at_k,
+        "config": {
+            "predictions_path": predictions_path,
+            "problem_file": problem_file,
+            "n_samples": 1,
+        },
+        "samples_path": samples_path,
+    }
+    with open(output_path, "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"Results saved to {output_path}")
+
+
 if __name__ == "__main__":
     fire.Fire(evaluate)

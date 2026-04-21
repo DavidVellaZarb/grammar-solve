@@ -26,6 +26,99 @@ def _try_execute(program: str, executor) -> str | None:
         return None
 
 
+def _score_geoquery(
+    gold: str,
+    raw_prediction: str,
+    pred_program: str,
+    executor,
+) -> dict:
+    exact_match = gold in raw_prediction
+
+    if executor is not None:
+        gold_result = _try_execute(gold, executor)
+        assert gold_result is not None, f"Gold program failed to execute: {gold}"
+        pred_result = _try_execute(pred_program, executor)
+        exec_match = gold_result == pred_result
+    else:
+        exec_match = None
+
+    gold_tokens = (
+        gold.replace("(", " ( ").replace(")", " ) ").replace(",", " , ").split()
+    )
+    pred_tokens = (
+        pred_program.replace("(", " ( ").replace(")", " ) ").replace(",", " , ").split()
+    )
+    bleu = sentence_bleu(
+        [gold_tokens], pred_tokens,
+        smoothing_function=SmoothingFunction().method1,
+    )
+
+    return {
+        "exact_match": exact_match,
+        "execution_match": exec_match,
+        "bleu": bleu,
+    }
+
+
+def _summarize_geoquery(results: list[dict]) -> dict:
+    total = len(results)
+    exact_count = sum(1 for r in results if r["exact_match"])
+    bleus = [r["bleu"] for r in results]
+    metrics = {
+        "accuracy": exact_count / total if total else 0.0,
+        "exact_match": exact_count / total if total else 0.0,
+        "bleu": sum(bleus) / len(bleus) if bleus else 0.0,
+        "correct": exact_count,
+        "total": total,
+    }
+    if any(r["execution_match"] is not None for r in results):
+        exec_count = sum(1 for r in results if r["execution_match"])
+        metrics["execution_accuracy"] = exec_count / total if total else 0.0
+        metrics["execution_correct"] = exec_count
+        metrics["execution_total"] = total
+    return metrics
+
+
+def evaluate_predictions(
+    predictions_path: str,
+    output_path: str,
+):
+    try:
+        from geo_executor import GeoExecutor
+        executor = GeoExecutor()
+        print("GeoQuery executor loaded (execution accuracy will be computed)")
+    except Exception as e:
+        executor = None
+        print(f"GeoQuery executor unavailable ({type(e).__name__}); skipping execution accuracy")
+
+    with open(predictions_path) as f:
+        preds = json.load(f)["data"]
+
+    results = []
+    for entry in preds:
+        gold = entry["gold_program"]
+        raw = entry.get("raw_prediction") or ""
+        pred_program = entry.get("extracted_program") or extract_program(raw)
+        scores = _score_geoquery(gold, raw, pred_program, executor)
+        results.append({
+            "query": entry["query"],
+            "gold": gold,
+            "prediction": raw,
+            "pred_program": pred_program,
+            **scores,
+        })
+
+    metrics = _summarize_geoquery(results)
+    print(f"Exact match:         {metrics['exact_match']:.4f} "
+          f"({metrics['correct']}/{metrics['total']})")
+    if "execution_accuracy" in metrics:
+        print(f"Execution accuracy:  {metrics['execution_accuracy']:.4f} "
+              f"({metrics['execution_correct']}/{metrics['execution_total']})")
+    print(f"BLEU:                {metrics['bleu']:.4f}")
+
+    save_results(metrics, results, output_path)
+
+
 def evaluate(
     adapter: str,
     test_path: str = "data/geoquery/test.json",
@@ -111,50 +204,18 @@ def evaluate(
     for ex, prompt, pred in zip(examples, prompts, predictions):
         gold = ex["program"]
         pred_program = extract_program(pred)
-
-        exact_match = gold in pred
-
-        gold_result = _try_execute(gold, executor)
-        assert gold_result is not None, (
-            f"Gold program failed to execute: {gold}"
-        )
-        pred_result = _try_execute(pred_program, executor)
-        exec_match = gold_result == pred_result
-        gold_tokens = gold.replace("(", " ( ").replace(")", " ) ").replace(",", " , ").split()
-        pred_tokens = pred_program.replace("(", " ( ").replace(")", " ) ").replace(",", " , ").split()
-        bleu = sentence_bleu(
-            [gold_tokens], pred_tokens,
-            smoothing_function=SmoothingFunction().method1,
-        )
-
+        scores = _score_geoquery(gold, pred, pred_program, executor)
         results.append({
             "prompt": prompt,
             "gold": gold,
             "prediction": pred,
             "pred_program": pred_program,
-            "exact_match": exact_match,
-            "execution_match": exec_match,
-            "bleu": bleu,
+            **scores,
         })
 
-    total = len(results)
-    exact_count = sum(1 for r in results if r["exact_match"])
-    bleus = [r["bleu"] for r in results]
-
-    metrics = {
-        "accuracy": exact_count / total if total > 0 else 0.0,
-        "exact_match": exact_count / total if total > 0 else 0.0,
-        "bleu": sum(bleus) / len(bleus) if bleus else 0.0,
-        "correct": exact_count,
-        "total": total,
-    }
-
-    exec_count = sum(1 for r in results if r["execution_match"])
-    metrics["execution_accuracy"] = exec_count / total if total > 0 else 0.0
-    metrics["execution_correct"] = exec_count
-    metrics["execution_total"] = total
-
-    print(f"Exact match:         {metrics['exact_match']:.4f} ({exact_count}/{total})")
+    metrics = _summarize_geoquery(results)
+    print(f"Exact match:         {metrics['exact_match']:.4f} "
+          f"({metrics['correct']}/{metrics['total']})")
     print(f"Execution accuracy:  {metrics['execution_accuracy']:.4f} "
           f"({metrics['execution_correct']}/{metrics['execution_total']})")
     print(f"BLEU:                {metrics['bleu']:.4f}")

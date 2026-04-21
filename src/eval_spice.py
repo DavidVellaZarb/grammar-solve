@@ -354,5 +354,78 @@ def evaluate(
         save_results(metrics, results, output_path)
 
 
+def evaluate_predictions(
+    predictions_path: str,
+    output_path: str,
+    ngspice_timeout: float = 10.0,
+    ged_timeout: float = 5.0,
+    num_workers: int | None = None,
+):
+    """Evaluate a predictions JSON (from icl.py) for SPICE."""
+    have_ngspice = shutil.which("ngspice") is not None
+    if not have_ngspice:
+        print("ngspice not found on PATH — simulation_success will be skipped")
+
+    with open(predictions_path) as f:
+        preds = json.load(f)["data"]
+
+    eval_args = [
+        (
+            i,
+            entry["gold_program"],
+            "",
+            entry.get("raw_prediction") or "",
+            ged_timeout,
+            ngspice_timeout,
+        )
+        for i, entry in enumerate(preds)
+    ]
+
+    if num_workers is None:
+        num_workers = min(16, os.cpu_count() or 1, max(1, len(eval_args)))
+    results_unordered = []
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        futures = {executor.submit(_evaluate_single, args): args[0] for args in eval_args}
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Evaluating"):
+            results_unordered.append(future.result())
+    results = sorted(results_unordered, key=lambda r: r.pop("idx"))
+
+    if not have_ngspice:
+        for r in results:
+            r["simulation_success"] = None
+
+    total = len(results)
+    exact_count = sum(1 for r in results if r["exact_match"])
+    valid_count = sum(1 for r in results if r["valid"])
+    ged_sims = [r["ged_similarity"] for r in results]
+    bleus = [r["bleu"] for r in results]
+    comp_f1s = [r["component_f1"] for r in results]
+
+    metrics = {
+        "ged_similarity": sum(ged_sims) / len(ged_sims) if ged_sims else 0.0,
+        "syntax_validity": valid_count / total if total > 0 else 0.0,
+        "exact_match": exact_count / total if total > 0 else 0.0,
+        "accuracy": exact_count / total if total > 0 else 0.0,
+        "bleu": sum(bleus) / len(bleus) if bleus else 0.0,
+        "component_f1": sum(comp_f1s) / len(comp_f1s) if comp_f1s else 0.0,
+        "correct": exact_count,
+        "total": total,
+    }
+    if have_ngspice:
+        sim_count = sum(1 for r in results if r["simulation_success"])
+        metrics["simulation_success"] = sim_count / total if total > 0 else 0.0
+
+    print(f"GED similarity:     {metrics['ged_similarity']:.4f}")
+    print(f"Syntax validity:    {metrics['syntax_validity']:.4f} ({valid_count}/{total})")
+    print(f"Exact match:        {metrics['exact_match']:.4f} ({exact_count}/{total})")
+    print(f"Component F1:       {metrics['component_f1']:.4f}")
+    print(f"BLEU:               {metrics['bleu']:.4f}")
+    if "simulation_success" in metrics:
+        sim_count = sum(1 for r in results if r["simulation_success"])
+        print(f"Simulation success: {metrics['simulation_success']:.4f} ({sim_count}/{total})")
+
+    save_results(metrics, results, output_path)
+
+
 if __name__ == "__main__":
     fire.Fire(evaluate)

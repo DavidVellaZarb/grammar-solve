@@ -186,5 +186,31 @@ def evaluate(
         save_results(metrics, results, output_path)
 
 
+def evaluate_predictions(
+    predictions_path: str,
+    output_path: str,
+):
+    """Evaluate a predictions JSON (from icl.py) for SMCalFlow: substring match."""
+    with open(predictions_path) as f:
+        preds = json.load(f)["data"]
+
+    results = []
+    for entry in preds:
+        gold = entry["gold_program"]
+        raw = entry.get("raw_prediction") or ""
+        pred_program = entry.get("extracted_program") or ""
+        results.append({
+            "query": entry["query"],
+            "gold": gold,
+            "prediction": raw,
+            "pred_program": pred_program,
+            "match": check_match(gold, raw),
+        })
+
+    metrics = compute_metrics(results)
+    print(f"Accuracy: {metrics['accuracy']:.4f} ({metrics['correct']}/{metrics['total']})")
+    save_results(metrics, results, output_path)
+
+
 if __name__ == "__main__":
     fire.Fire(evaluate)

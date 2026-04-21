@@ -164,5 +164,90 @@ def evaluate(
         save_results(metrics, results, output_path)
 
 
+def evaluate_predictions(
+    predictions_path: str,
+    output_path: str,
+):
+    """Evaluate a predictions JSON (from icl.py) for Overnight-Blocks."""
+    try:
+        from overnight_executor import denormalize_lf, execute, is_available
+        executor_ok = is_available()
+        if not executor_ok:
+            print(
+                "Overnight SEMPRE evaluator not found; skipping execution accuracy. "
+                "Run scripts/overnight/setup_evaluator.sh to set it up."
+            )
+    except Exception as e:
+        executor_ok = False
+        print(f"Overnight executor unavailable ({type(e).__name__}); skipping execution accuracy")
+
+    with open(predictions_path) as f:
+        preds = json.load(f)["data"]
+
+    results = []
+    for entry in preds:
+        gold = entry["gold_program"]
+        raw = entry.get("raw_prediction") or ""
+        pred_program = entry.get("extracted_program") or extract_program(raw)
+
+        gold_tokenized = " ".join(re.findall(r'[a-zA-Z0-9_.]+|[^\s]', gold))
+        pred_tokenized = " ".join(re.findall(r'[a-zA-Z0-9_.]+|[^\s]', raw))
+        exact_match = gold_tokenized in pred_tokenized
+
+        if executor_ok:
+            gold_denorm = denormalize_lf(gold)
+            gold_result = execute([gold_denorm])[0]
+            assert gold_result is not None, f"Gold program failed to execute: {gold}"
+            try:
+                pred_denorm = denormalize_lf(pred_program)
+                pred_result = execute([pred_denorm])[0]
+            except Exception:
+                pred_result = None
+            exec_match = gold_result == pred_result
+        else:
+            exec_match = None
+
+        gold_tokens = gold.replace("(", " ( ").replace(")", " ) ").split()
+        pred_tokens = pred_program.replace("(", " ( ").replace(")", " ) ").split()
+        bleu = sentence_bleu(
+            [gold_tokens], pred_tokens,
+            smoothing_function=SmoothingFunction().method1,
+        )
+
+        results.append({
+            "query": entry["query"],
+            "gold": gold,
+            "prediction": raw,
+            "pred_program": pred_program,
+            "exact_match": exact_match,
+            "execution_match": exec_match,
+            "bleu": bleu,
+        })
+
+    total = len(results)
+    exact_count = sum(1 for r in results if r["exact_match"])
+    bleus = [r["bleu"] for r in results]
+    metrics = {
+        "accuracy": exact_count / total if total > 0 else 0.0,
+        "exact_match": exact_count / total if total > 0 else 0.0,
+        "bleu": sum(bleus) / len(bleus) if bleus else 0.0,
+        "correct": exact_count,
+        "total": total,
+    }
+    if executor_ok:
+        exec_count = sum(1 for r in results if r["execution_match"])
+        metrics["execution_accuracy"] = exec_count / total if total > 0 else 0.0
+        metrics["execution_correct"] = exec_count
+        metrics["execution_total"] = total
+
+    print(f"Exact match:         {metrics['exact_match']:.4f} ({exact_count}/{total})")
+    if "execution_accuracy" in metrics:
+        print(f"Execution accuracy:  {metrics['execution_accuracy']:.4f} "
+              f"({metrics['execution_correct']}/{metrics['execution_total']})")
+    print(f"BLEU:                {metrics['bleu']:.4f}")
+
+    save_results(metrics, results, output_path)
+
+
 if __name__ == "__main__":
     fire.Fire(evaluate)
