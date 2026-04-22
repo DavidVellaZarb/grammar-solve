@@ -43,8 +43,12 @@ def generate_grammar(
     prompts = []
     for ex in examples:
         messages = format_prompt_messages(ex, task=task)
+        chat_kwargs = {}
+        if "qwen3" in base_model_name.lower():
+            chat_kwargs["enable_thinking"] = False
         text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True,
+            **chat_kwargs,
         )
         prompts.append(text)
 

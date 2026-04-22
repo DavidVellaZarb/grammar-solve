@@ -93,6 +93,10 @@ def evaluate(
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
 
+    chat_template_kwargs: dict = {}
+    if "qwen3" in base_model_name.lower():
+        chat_template_kwargs["enable_thinking"] = False
+
     problems = read_problems(problem_file)
     print(f"Loaded {len(problems)} problems from {problem_file}")
 
@@ -152,7 +156,8 @@ def evaluate(
             example, include_grammar=include_grammar, task="program"
         )
         text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True,
+            **chat_template_kwargs,
         )
         formatted_prompts.append(text)
 
