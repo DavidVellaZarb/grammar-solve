@@ -174,6 +174,7 @@ def plot_model_panel(
 
             ax.set_xticks(range(num_k))
             ax.set_xticklabels(k_values)
+            ax.set_xlim(-0.5, num_k - 0.5)
             ax.set_ylabel("Pass Rate")
         else:
             metrics = ds["metrics"]
@@ -205,6 +206,7 @@ def plot_model_panel(
 
             ax.set_xticks(range(num_metrics))
             ax.set_xticklabels([metric_labels.get(m, m) for m in metrics])
+            ax.set_xlim(-0.5, num_metrics - 0.5)
             ax.set_ylabel("Score")
 
         ax.set_ylim(0, 1.0)
