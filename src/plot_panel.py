@@ -85,26 +85,59 @@ def plot_model_panel(
     def _n_groups(ds):
         return 3 if ds.get("pass_at_k") else len(ds["metrics"])
 
-    row1 = DATASETS[:4]
-    row2 = DATASETS[4:]
-    widths1 = [_n_groups(ds) for ds in row1]
-    widths2 = [_n_groups(ds) for ds in row2]
-    while len(widths2) < len(widths1):
-        widths2.append(0.001)
+    def _has_data(ds):
+        ds_dir = f"{results_dir}/{ds['dir']}/{model_alias}"
+        return any(os.path.exists(f"{ds_dir}/{m}.json") for m, _ in METHODS)
 
-    fig = plt.figure(figsize=(22, 10))
-    gs = fig.add_gridspec(2, len(widths1), width_ratios=widths1, hspace=0.35, wspace=0.3)
-    gs2 = fig.add_gridspec(2, len(widths2), width_ratios=widths2, hspace=0.35, wspace=0.3)
+    datasets = [ds for ds in DATASETS if _has_data(ds)]
+    n = len(datasets)
+    widths = [_n_groups(ds) for ds in datasets]
+
+    if n <= 1:
+        split = n
+    else:
+        total = sum(widths)
+        best_k, best_score = None, None
+        for k in range(1, n):
+            diff = abs(sum(widths[:k]) - (total - sum(widths[:k])))
+            tie = abs(k - (n + 1) // 2)
+            score = (diff, tie)
+            if best_score is None or score < best_score:
+                best_k, best_score = k, score
+        split = best_k
+
+    row1 = datasets[:split]
+    row2 = datasets[split:]
+    widths1 = widths[:split]
+    widths2 = widths[split:]
+
+    def _pad(ws, target):
+        gap = target - sum(ws)
+        if gap <= 0:
+            return ws, 0
+        left = gap / 2
+        right = gap - left
+        return [left] + ws + [right], 1
+
+    target_w = max(sum(widths1), sum(widths2)) if widths2 else sum(widths1)
+    widths1_full, col_offset1 = _pad(widths1, target_w)
+    widths2_full, col_offset2 = _pad(widths2, target_w) if widths2 else ([], 0)
+
+    n_rows = 2 if widths2 else 1
+    fig_h = 10 if n_rows == 2 else 5.5
+    fig = plt.figure(figsize=(22, fig_h))
+    gs = fig.add_gridspec(n_rows, len(widths1_full), width_ratios=widths1_full, hspace=0.35, wspace=0.3)
+    gs2 = fig.add_gridspec(n_rows, len(widths2_full), width_ratios=widths2_full, hspace=0.35, wspace=0.3) if widths2 else None
 
     axes = []
     for j in range(len(widths1)):
-        axes.append(fig.add_subplot(gs[0, j]))
-    for j in range(len(row2)):
-        axes.append(fig.add_subplot(gs2[1, j]))
+        axes.append(fig.add_subplot(gs[0, j + col_offset1]))
+    for j in range(len(widths2)):
+        axes.append(fig.add_subplot(gs2[1, j + col_offset2]))
 
     bar_width = 0.22
 
-    for idx, ds in enumerate(DATASETS):
+    for idx, ds in enumerate(datasets):
         ax = axes[idx]
         ds_dir = f"{results_dir}/{ds['dir']}/{model_alias}"
 
@@ -176,7 +209,7 @@ def plot_model_panel(
 
         ax.set_ylim(0, 1.0)
         ax.set_title(ds["name"], fontweight="bold")
-        is_row_start = idx == 0 or idx == len(row1)
+        is_row_start = idx == 0 or idx == split
         if not is_row_start:
             ax.set_ylabel("")
             ax.set_yticklabels([])
