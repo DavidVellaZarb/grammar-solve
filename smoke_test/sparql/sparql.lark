@@ -1,0 +1,126 @@
+query: prologue* (select_query | ask_query | construct_query | describe_query)
+
+prologue: PREFIX PNAME_NS IRIREF
+        | BASE IRIREF
+
+select_query: SELECT select_modifier? select_vars dataset_clause* where_clause solution_modifier*
+ask_query: ASK dataset_clause* where_clause solution_modifier*
+construct_query: CONSTRUCT (group_graph_pattern | triples_template) dataset_clause* where_clause? solution_modifier*
+describe_query: DESCRIBE (VAR | IRIREF | PNAME | "*")+ dataset_clause* where_clause? solution_modifier*
+
+select_modifier: DISTINCT | REDUCED
+select_vars: "*" | select_var+
+select_var: VAR | "(" expr AS VAR ")"
+dataset_clause: FROM NAMED? (IRIREF | PNAME)
+where_clause: WHERE? group_graph_pattern
+
+group_graph_pattern: "{" graph_pattern* "}"
+?graph_pattern: triples_block "."?
+              | optional_graph
+              | minus_graph
+              | service_graph
+              | bind_clause
+              | filter_clause
+              | values_clause
+              | group_graph_pattern
+              | union_graph
+optional_graph: OPTIONAL group_graph_pattern
+minus_graph: MINUS group_graph_pattern
+service_graph: SERVICE SILENT? term group_graph_pattern
+union_graph: group_graph_pattern (UNION group_graph_pattern)+
+bind_clause: BIND "(" expr AS VAR ")"
+filter_clause: FILTER constraint
+constraint: bracketted_expr | function_call
+values_clause: VALUES VAR "{" value* "}"
+
+triples_template: "{" triples_block "."? "}"
+triples_block: triples_same_subject (";" predicate_object_list?)* ("," object_list?)*
+triples_same_subject: subject predicate_object_list
+predicate_object_list: verb object_list (";" verb object_list)*
+object_list: object ("," object)*
+subject: term | collection | blank_node_property_list
+verb: term | A | property_path
+object: term | collection | blank_node_property_list
+
+property_path: term path_suffix*
+path_suffix: "/" term | "|" term | "^" term | "*" | "+" | "?"
+collection: "(" term* ")"
+blank_node_property_list: "[" predicate_object_list? "]"
+
+?expr: or_expr
+?or_expr: and_expr (OR and_expr)*
+?and_expr: rel_expr (AND rel_expr)*
+?rel_expr: additive (("=" | "!=" | "<" | ">" | "<=" | ">=") additive)?
+?additive: multiplicative (("+" | "-") multiplicative)*
+?multiplicative: unary (("*" | "/") unary)*
+?unary: ("!" | "+" | "-") unary | primary_expr
+?primary_expr: term | bracketted_expr | function_call
+bracketted_expr: "(" expr ")"
+function_call: function_name "(" arg_list? ")"
+function_name: term | IDENTIFIER
+arg_list: expr ("," expr)*
+
+?term: VAR
+     | IRIREF
+     | PNAME
+     | literal
+     | A
+literal: STRING LANGTAG? | NUMBER | TRUE | FALSE
+value: literal | IRIREF | PNAME | VAR | UNDEF
+
+solution_modifier: group_clause | having_clause | order_clause | limit_clause | offset_clause
+group_clause: GROUP BY group_condition+
+group_condition: VAR | bracketted_expr
+having_clause: HAVING constraint+
+order_clause: ORDER BY order_condition+
+order_condition: (ASC | DESC) "(" expr ")" | expr
+limit_clause: LIMIT NUMBER
+offset_clause: OFFSET NUMBER
+
+PREFIX.3: /(?i:prefix)\b/
+BASE.3: /(?i:base)\b/
+SELECT.3: /(?i:select)\b/
+ASK.3: /(?i:ask)\b/
+CONSTRUCT.3: /(?i:construct)\b/
+DESCRIBE.3: /(?i:describe)\b/
+DISTINCT.3: /(?i:distinct)\b/
+REDUCED.3: /(?i:reduced)\b/
+FROM.3: /(?i:from)\b/
+NAMED.3: /(?i:named)\b/
+WHERE.3: /(?i:where)\b/
+OPTIONAL.3: /(?i:optional)\b/
+MINUS.3: /(?i:minus)\b/
+SERVICE.3: /(?i:service)\b/
+SILENT.3: /(?i:silent)\b/
+UNION.3: /(?i:union)\b/
+BIND.3: /(?i:bind)\b/
+FILTER.3: /(?i:filter)\b/
+VALUES.3: /(?i:values)\b/
+AS.3: /(?i:as)\b/
+A.3: /a\b/
+TRUE.3: /(?i:true)\b/
+FALSE.3: /(?i:false)\b/
+UNDEF.3: /(?i:undef)\b/
+GROUP.3: /(?i:group)\b/
+BY.3: /(?i:by)\b/
+HAVING.3: /(?i:having)\b/
+ORDER.3: /(?i:order)\b/
+ASC.3: /(?i:asc)\b/
+DESC.3: /(?i:desc)\b/
+LIMIT.3: /(?i:limit)\b/
+OFFSET.3: /(?i:offset)\b/
+OR.3: /(?i:or)\b|\|\|/
+AND.3: /(?i:and)\b|&&/
+
+VAR: /[?$][A-Za-z_][A-Za-z0-9_]*/
+IRIREF: /<[^<>"{}|^`\\]*>/
+PNAME_NS: /[A-Za-z_][A-Za-z0-9_.-]*:/
+PNAME: /[A-Za-z_][A-Za-z0-9_.-]*:[A-Za-z0-9_~.\-%]+/
+IDENTIFIER: /[A-Za-z_][A-Za-z0-9_]*/
+STRING: /"([^"\\]|\\.)*"|'([^'\\]|\\.)*'/
+LANGTAG: /@[A-Za-z]+(-[A-Za-z0-9]+)*/
+NUMBER: /[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?/
+
+COMMENT: /#[^\n]*/
+%ignore COMMENT
+%ignore /[ \t\r\n]+/

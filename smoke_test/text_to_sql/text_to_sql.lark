@@ -1,0 +1,108 @@
+query: select_stmt
+
+?select_stmt: with_clause? SELECT distinct? select_list from_clause? where_clause? group_clause? having_clause? order_clause? limit_clause?
+
+with_clause: WITH cte ("," cte)*
+cte: identifier AS "(" select_stmt ")"
+distinct: DISTINCT
+select_list: "*" | select_item ("," select_item)*
+select_item: expr alias?
+alias: AS? identifier
+
+from_clause: FROM table_ref (("," table_ref) | join_clause)*
+table_ref: table_factor alias?
+table_factor: column_name | "(" select_stmt ")"
+join_clause: join_type? JOIN table_ref ON expr
+join_type: INNER | LEFT OUTER? | RIGHT OUTER? | FULL OUTER? | CROSS
+
+where_clause: WHERE expr
+group_clause: GROUP BY expr_list
+having_clause: HAVING expr
+order_clause: ORDER BY order_item ("," order_item)*
+order_item: expr (ASC | DESC)?
+limit_clause: LIMIT expr
+
+?expr: or_expr
+?or_expr: and_expr (OR and_expr)*
+?and_expr: not_expr (AND not_expr)*
+?not_expr: NOT not_expr | comparison
+?comparison: additive comparison_tail*
+           | EXISTS "(" select_stmt ")"
+comparison_tail: comp_op additive
+               | IS NOT? NULL
+               | NOT? IN "(" (select_stmt | expr_list) ")"
+               | NOT? BETWEEN additive AND additive
+               | NOT? LIKE additive
+
+?additive: multiplicative (("+" | "-") multiplicative)*
+?multiplicative: unary (("*" | "/" | "%") unary)*
+?unary: ("+" | "-") unary | primary
+
+?primary: function_call
+        | case_expr
+        | value
+        | column_name
+        | "(" select_stmt ")"
+        | "(" expr ")"
+
+function_call: identifier "(" function_args? ")"
+function_args: "*" | distinct? expr_list
+case_expr: CASE case_when+ (ELSE expr)? END
+case_when: WHEN expr THEN expr
+expr_list: expr ("," expr)*
+column_name: identifier ("." identifier)*
+value: NUMBER | SINGLE_QUOTED_STRING | DOUBLE_QUOTED_STRING | PARAMETER | NULL | TRUE | FALSE
+
+identifier: IDENTIFIER | BACKTICK_IDENTIFIER | BRACKET_IDENTIFIER | DOUBLE_QUOTED_STRING
+comp_op: "=" | "!=" | "<>" | "<" | ">" | "<=" | ">="
+
+SELECT.3: /(?i:select)\b/
+WITH.3: /(?i:with)\b/
+AS.3: /(?i:as)\b/
+DISTINCT.3: /(?i:distinct)\b/
+FROM.3: /(?i:from)\b/
+WHERE.3: /(?i:where)\b/
+GROUP.3: /(?i:group)\b/
+BY.3: /(?i:by)\b/
+HAVING.3: /(?i:having)\b/
+ORDER.3: /(?i:order)\b/
+LIMIT.3: /(?i:limit)\b/
+JOIN.3: /(?i:join)\b/
+ON.3: /(?i:on)\b/
+INNER.3: /(?i:inner)\b/
+LEFT.3: /(?i:left)\b/
+RIGHT.3: /(?i:right)\b/
+FULL.3: /(?i:full)\b/
+CROSS.3: /(?i:cross)\b/
+OUTER.3: /(?i:outer)\b/
+AND.3: /(?i:and)\b/
+OR.3: /(?i:or)\b/
+NOT.3: /(?i:not)\b/
+IN.3: /(?i:in)\b/
+BETWEEN.3: /(?i:between)\b/
+LIKE.3: /(?i:like)\b/
+IS.3: /(?i:is)\b/
+NULL.3: /(?i:null)\b/
+TRUE.3: /(?i:true)\b/
+FALSE.3: /(?i:false)\b/
+CASE.3: /(?i:case)\b/
+WHEN.3: /(?i:when)\b/
+THEN.3: /(?i:then)\b/
+ELSE.3: /(?i:else)\b/
+END.3: /(?i:end)\b/
+EXISTS.3: /(?i:exists)\b/
+ASC.3: /(?i:asc)\b/
+DESC.3: /(?i:desc)\b/
+
+BACKTICK_IDENTIFIER: /`[^`]+`/
+BRACKET_IDENTIFIER: /\[[^\]]+\]/
+SINGLE_QUOTED_STRING: /'([^'\\]|\\.)*'/
+DOUBLE_QUOTED_STRING: /"([^"\\]|\\.)*"/
+NUMBER: /[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?/
+PARAMETER: "?"
+IDENTIFIER: /[A-Za-z_][A-Za-z0-9_$]*/
+
+COMMENT: /--[^\n]*/ | /\/\*[\s\S]*?\*\//
+%ignore COMMENT
+%ignore /[ \t\r\n]+/
+

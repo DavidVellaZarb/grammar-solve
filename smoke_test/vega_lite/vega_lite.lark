@@ -1,0 +1,19 @@
+value: object
+     | array
+     | ESCAPED_STRING
+     | SIGNED_NUMBER
+     | "true"
+     | "false"
+     | "null"
+
+object: "{" pair_list? "}"
+pair_list: pair ("," pair)*
+pair: ESCAPED_STRING ":" value
+
+array: "[" value_list? "]"
+value_list: value ("," value)*
+
+%import common.ESCAPED_STRING
+%import common.SIGNED_NUMBER
+%ignore /[ \t\r\n]+/
+

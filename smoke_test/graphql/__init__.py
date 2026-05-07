@@ -1,0 +1,2 @@
+"""GraphQL smoke test."""
+

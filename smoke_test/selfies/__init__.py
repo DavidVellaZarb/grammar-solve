@@ -1,0 +1,2 @@
+"""SELFIES smoke test."""
+

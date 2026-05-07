@@ -1,0 +1,2 @@
+"""Vega-Lite smoke test."""
+

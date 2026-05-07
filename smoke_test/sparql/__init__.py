@@ -1,0 +1,2 @@
+"""SPARQL smoke test."""
+

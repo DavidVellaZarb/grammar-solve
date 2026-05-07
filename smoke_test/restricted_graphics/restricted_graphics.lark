@@ -1,0 +1,22 @@
+document: element
+
+?node: element | TEXT
+element: start_tag node* end_tag
+       | empty_tag
+start_tag: "<" NAME attribute* ">"
+end_tag: "</" NAME ">"
+empty_tag: "<" NAME attribute* "/>"
+attribute: NAME "=" ATTR_VALUE
+
+NAME: /[A-Za-z_][A-Za-z0-9_.:-]*/
+ATTR_VALUE: /"[^"]*"|'[^']*'|[^\s"'=<>`]+/
+TEXT: /[^<>\s][^<]*/
+
+COMMENT: /<!--(.|\n)*?-->/
+PI: /<\?(.|\n)*?\?>/
+DOCTYPE: /<!DOCTYPE(.|\n)*?>/
+%ignore COMMENT
+%ignore PI
+%ignore DOCTYPE
+%ignore /[ \t\r\n]+/
+
