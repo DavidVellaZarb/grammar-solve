@@ -54,14 +54,15 @@ def _extract_vega_lite(example: dict) -> tuple[str, str] | None:
         loaded = json.loads(program)
     except Exception:
         return None
-    if not isinstance(loaded, dict) or "mark" not in loaded:
+    spec_keys = {"mark", "encoding", "layer", "concat", "vconcat", "hconcat", "facet", "spec", "repeat"}
+    if not isinstance(loaded, dict) or not spec_keys.intersection(loaded):
         return None
     return query, program
 
 
 def load(
     output_dir: str = "data/smoke_test/vega_lite",
-    max_scan: int = 250_000,
+    max_scan: int = 1_000_000,
 ) -> None:
     dataset = iter_hf_records(DATASET, split_names=("train",))
     write_smoke_splits(

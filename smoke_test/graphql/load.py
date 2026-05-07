@@ -6,6 +6,7 @@ import fire
 
 from smoke_test.common import (
     COMMON_GENERIC_TERMINALS,
+    clean_code_block,
     collapse_ws,
     conversation_pair,
     first_text,
@@ -22,7 +23,7 @@ GENERIC_TERMINALS = COMMON_GENERIC_TERMINALS | {"VARIABLE"}
 
 
 def _looks_like_graphql(text: str) -> bool:
-    stripped = text.strip()
+    stripped = clean_code_block(text)
     return "{" in stripped and (
         stripped.startswith("{")
         or bool(re.search(r"\b(query|mutation|subscription)\b", stripped))
@@ -37,6 +38,7 @@ def _extract_graphql(example: dict) -> tuple[str, str] | None:
             "question",
             "prompt",
             "instruction",
+            "nlcommand",
             "natural_language_query",
             "query_text",
             "text",
@@ -44,7 +46,7 @@ def _extract_graphql(example: dict) -> tuple[str, str] | None:
     ) or conv_question
     program = None
     if conv_program and _looks_like_graphql(conv_program):
-        program = conv_program
+        program = clean_code_block(conv_program)
     for field in [
         "graphql",
         "graphql_query",
@@ -59,12 +61,12 @@ def _extract_graphql(example: dict) -> tuple[str, str] | None:
             break
         value = first_text(example, [field])
         if value and _looks_like_graphql(value):
-            program = value
+            program = clean_code_block(value)
             break
     if program is None:
         for value in iter_string_values(example):
             if _looks_like_graphql(value):
-                program = value
+                program = clean_code_block(value)
                 break
     if not question or not program:
         return None

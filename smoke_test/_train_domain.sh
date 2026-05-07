@@ -9,6 +9,11 @@ shift 4
 
 TRAIN_PATH="data/smoke_test/${DOMAIN}/train.json"
 VALID_PATH="data/smoke_test/${DOMAIN}/valid.json"
+TRAIN_EVAL_STRATEGY="${EVAL_STRATEGY:-steps}"
+
+if [[ "${DOMAIN}" == "restricted_graphics" && -z "${EVAL_STRATEGY:-}" ]]; then
+    TRAIN_EVAL_STRATEGY="no"
+fi
 
 if [[ ! -f "${TRAIN_PATH}" || ! -f "${VALID_PATH}" ]]; then
     echo "Missing ${DOMAIN} data. Run: uv run python -m smoke_test.${DOMAIN}.load"
@@ -23,6 +28,7 @@ COMMON_ARGS=(
     --max_seq_length "${MAX_SEQ_LENGTH}"
     --per_device_train_batch_size "${PER_DEVICE_TRAIN_BATCH_SIZE:-2}"
     --gradient_accumulation_steps "${GRADIENT_ACCUMULATION_STEPS:-8}"
+    --eval_strategy "${TRAIN_EVAL_STRATEGY}"
     --eval_steps "${EVAL_STEPS:-100}"
     --save_steps "${SAVE_STEPS:-100}"
     --save_total_limit "${SAVE_TOTAL_LIMIT:-1}"
@@ -48,4 +54,3 @@ uv run python src/train.py \
     --include_grammar \
     --output_dir "outputs/smoke_test/${MODEL_ALIAS}/${DOMAIN}/gold" \
     "$@"
-

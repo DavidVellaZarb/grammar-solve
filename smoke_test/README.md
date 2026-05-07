@@ -30,8 +30,18 @@ Run all implemented domains on Qwen3-4B:
 bash smoke_test/run_all_qwen3_4b.sh
 ```
 
+Rerun the domains that failed in the first smoke pass and then regenerate the
+summary plot:
+
+```bash
+bash smoke_test/run_failed_qwen3_4b.sh
+```
+
 For a shorter infrastructure check, pass trainer args through the runner:
 
 ```bash
 MAX_STEPS=2 bash smoke_test/run_all_qwen3_4b.sh
 ```
+
+The multi-panel baseline-vs-gold plot is written to
+`outputs/analysis/smoke_test/qwen3-4b_baseline_vs_gold.png`.

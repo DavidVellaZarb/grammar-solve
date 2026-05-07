@@ -6,6 +6,7 @@ import fire
 
 from smoke_test.common import (
     COMMON_GENERIC_TERMINALS,
+    clean_code_block,
     conversation_pair,
     first_text,
     iter_hf_records,
@@ -14,13 +15,14 @@ from smoke_test.common import (
     write_smoke_splits,
 )
 
-DATASET = "mohnish/lc_quad"
+DATASET = "Orange/lc_quad2-sparqltotext"
 DOMAIN = "sparql"
 GRAMMAR = repo_path("smoke_test", DOMAIN, "sparql.lark")
 GENERIC_TERMINALS = COMMON_GENERIC_TERMINALS | {"LANGTAG"}
 
 
 def _looks_like_sparql(text: str) -> bool:
+    text = clean_code_block(text)
     return bool(
         re.search(r"\b(select|ask|construct|describe|prefix)\b", text, flags=re.IGNORECASE)
     ) and ("{" in text or "where" in text.lower())
@@ -32,8 +34,9 @@ def _extract_sparql(example: dict) -> tuple[str, str] | None:
         example,
         [
             "question",
-            "corrected_question",
             "paraphrased_question",
+            "NNQT_question",
+            "corrected_question",
             "intermediary_question",
             "prompt",
             "instruction",
@@ -41,11 +44,13 @@ def _extract_sparql(example: dict) -> tuple[str, str] | None:
     ) or conv_question
     sparql = None
     if conv_program and _looks_like_sparql(conv_program):
-        sparql = conv_program
+        sparql = clean_code_block(conv_program)
     for field in [
+        "simplified_query",
+        "sparql_wikidata",
+        "sparql_dbpedia18",
         "sparql_query",
         "sparql",
-        "sparql_wikidata",
         "query",
         "target",
         "output",
@@ -55,12 +60,12 @@ def _extract_sparql(example: dict) -> tuple[str, str] | None:
             break
         value = first_text(example, [field])
         if value and _looks_like_sparql(value):
-            sparql = value
+            sparql = clean_code_block(value)
             break
     if sparql is None:
         for value in iter_string_values(example):
             if _looks_like_sparql(value):
-                sparql = value
+                sparql = clean_code_block(value)
                 break
     if not question or not sparql:
         return None
@@ -71,7 +76,7 @@ def load(
     output_dir: str = "data/smoke_test/sparql",
     max_scan: int = 100_000,
 ) -> None:
-    dataset = iter_hf_records(DATASET, split_names=("train", "validation", "test"))
+    dataset = iter_hf_records(DATASET, split_names=("train", "valid", "validation", "test"))
     write_smoke_splits(
         domain=DOMAIN,
         dataset=dataset,

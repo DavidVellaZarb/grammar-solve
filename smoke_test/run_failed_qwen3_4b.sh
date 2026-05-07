@@ -3,7 +3,8 @@ set -euo pipefail
 
 MODEL_NAME="Qwen/Qwen3-4B-Instruct-2507"
 MODEL_ALIAS="qwen3-4b"
-DOMAINS=(text_to_sql sparql graphql vega_lite vhdl restricted_graphics selfies)
+LOAD_TRAIN_EVAL_DOMAINS=(sparql graphql vega_lite)
+TRAIN_EVAL_DOMAINS=(restricted_graphics)
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 if [[ -f "${REPO_ROOT}/.env" ]]; then
@@ -36,6 +37,7 @@ run_step() {
     echo "######## ${LABEL} ########"
     if "$@"; then
         echo "######## ${LABEL}: OK ########"
+        return 0
     else
         local STATUS=$?
         echo "######## ${LABEL}: FAILED (${STATUS}) ########"
@@ -51,17 +53,26 @@ skip_step() {
     SKIPS+=("${LABEL}: ${REASON}")
 }
 
-for DOMAIN in "${DOMAINS[@]}"; do
+reset_adapters() {
+    local DOMAIN=$1
+    local OUTPUT_DIR="${REPO_ROOT}/outputs/smoke_test/${MODEL_ALIAS}/${DOMAIN}"
+    if [[ "${RESET_FAILED_ADAPTERS:-1}" == "1" ]]; then
+        rm -rf "${OUTPUT_DIR}/baseline" "${OUTPUT_DIR}/gold"
+    fi
+}
+
+for DOMAIN in "${LOAD_TRAIN_EVAL_DOMAINS[@]}"; do
     if run_step "LOAD ${DOMAIN}" uv run python -m "smoke_test.${DOMAIN}.load"; then
         LOAD_OK+=("${DOMAIN}")
     fi
 done
 
-for DOMAIN in "${DOMAINS[@]}"; do
+for DOMAIN in "${LOAD_TRAIN_EVAL_DOMAINS[@]}"; do
     if ! has_domain "${DOMAIN}" "${LOAD_OK[@]}"; then
         skip_step "TRAIN ${DOMAIN} (${MODEL_ALIAS})" "load failed"
         continue
     fi
+    reset_adapters "${DOMAIN}"
     if run_step \
         "TRAIN ${DOMAIN} (${MODEL_ALIAS})" \
         "${REPO_ROOT}/smoke_test/${DOMAIN}/train.sh" "${MODEL_NAME}" "${MODEL_ALIAS}" "$@"; then
@@ -69,7 +80,16 @@ for DOMAIN in "${DOMAINS[@]}"; do
     fi
 done
 
-for DOMAIN in "${DOMAINS[@]}"; do
+for DOMAIN in "${TRAIN_EVAL_DOMAINS[@]}"; do
+    reset_adapters "${DOMAIN}"
+    if run_step \
+        "TRAIN ${DOMAIN} (${MODEL_ALIAS})" \
+        "${REPO_ROOT}/smoke_test/${DOMAIN}/train.sh" "${MODEL_NAME}" "${MODEL_ALIAS}" "$@"; then
+        TRAIN_OK+=("${DOMAIN}")
+    fi
+done
+
+for DOMAIN in "${LOAD_TRAIN_EVAL_DOMAINS[@]}" "${TRAIN_EVAL_DOMAINS[@]}"; do
     if ! has_domain "${DOMAIN}" "${TRAIN_OK[@]}"; then
         skip_step "EVAL ${DOMAIN} (${MODEL_ALIAS})" "train failed or skipped"
         continue
@@ -100,4 +120,4 @@ if (( ${#FAILURES[@]} > 0 )); then
     exit 1
 fi
 
-echo "######## ALL STEPS COMPLETED ########"
+echo "######## FAILED-DOMAIN RERUN COMPLETED ########"
