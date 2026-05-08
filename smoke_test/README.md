@@ -45,3 +45,15 @@ MAX_STEPS=2 bash smoke_test/run_all_qwen3_4b.sh
 
 The multi-panel baseline-vs-gold plot is written to
 `outputs/analysis/smoke_test/qwen3-4b_baseline_vs_gold.png`.
+
+Compute the additional cheap domain metrics from existing smoke-test result
+JSONs and render the all-metrics multi-panel:
+
+```bash
+bash smoke_test/run_metrics_qwen3_4b.sh
+```
+
+This writes:
+
+- `outputs/analysis/smoke_test/qwen3-4b_baseline_vs_gold_all_metrics.png`
+- `outputs/analysis/smoke_test/qwen3-4b_baseline_vs_gold_all_metrics.json`

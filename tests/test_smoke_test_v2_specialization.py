@@ -46,3 +46,9 @@ def test_specialization_validator_ignores_quoted_terminal_names():
         "IDENTIFIER"
     }
     assert find_generic_placeholders('identifier ::= "IDENTIFIER"', terminals) == set()
+    assert (
+        find_generic_placeholders(
+            'raw_stmt ::= "VARIABLE counter : integer"', frozenset({"VARIABLE"})
+        )
+        == set()
+    )

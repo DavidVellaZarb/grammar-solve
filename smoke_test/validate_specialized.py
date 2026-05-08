@@ -43,12 +43,38 @@ def generic_terminals_for_domain(domain: str) -> frozenset[str]:
 
 
 def find_generic_placeholders(grammar: str, terminals: frozenset[str]) -> set[str]:
+    grammar = _mask_quoted_literals(grammar)
     found: set[str] = set()
     for terminal in terminals:
         pattern = rf'(?<![A-Za-z0-9_"]){re.escape(terminal)}(?![A-Za-z0-9_"])'
         if re.search(pattern, grammar):
             found.add(terminal)
     return found
+
+
+def _mask_quoted_literals(grammar: str) -> str:
+    chars: list[str] = []
+    in_quote = False
+    escaped = False
+    for ch in grammar:
+        if in_quote:
+            if escaped:
+                escaped = False
+                chars.append(" ")
+            elif ch == "\\":
+                escaped = True
+                chars.append(" ")
+            elif ch == '"':
+                in_quote = False
+                chars.append(ch)
+            else:
+                chars.append(" ")
+            continue
+
+        chars.append(ch)
+        if ch == '"':
+            in_quote = True
+    return "".join(chars)
 
 
 def validate_domain(data_root: Path, domain: str) -> list[str]:
