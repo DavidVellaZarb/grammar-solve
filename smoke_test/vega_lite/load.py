@@ -63,6 +63,7 @@ def _extract_vega_lite(example: dict) -> tuple[str, str] | None:
 def load(
     output_dir: str = "data/smoke_test/vega_lite",
     max_scan: int = 1_000_000,
+    specialize_terminals: bool = False,
 ) -> None:
     dataset = iter_hf_records(DATASET, split_names=("train",))
     write_smoke_splits(
@@ -72,7 +73,7 @@ def load(
         output_dir=output_dir,
         grammar_path=GRAMMAR,
         start="value",
-        generic_terminals=GENERIC_TERMINALS,
+        generic_terminals=frozenset() if specialize_terminals else GENERIC_TERMINALS,
         max_scan=max_scan,
         min_program_chars=20,
         max_program_chars=8_000,
