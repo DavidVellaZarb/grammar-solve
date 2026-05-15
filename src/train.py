@@ -25,16 +25,24 @@ from model_loading import (
 )
 
 
-_NEEDS_MM_TOKEN_TYPE_IDS = {"gemma4"}
+# Both Gemma-3 and Gemma-4 are loaded as multimodal classes (ForConditionalGeneration)
+# and require a token-type-ids field at training time to build the causal mask. The
+# field name differs: Gemma-3 uses `token_type_ids`, Gemma-4 uses `mm_token_type_ids`.
+# All-zero values mark every token as text (1 would mark it as an image patch).
+_TOKEN_TYPE_IDS_FIELD = {
+    "gemma3": "token_type_ids",
+    "gemma4": "mm_token_type_ids",
+}
 
 
-class _Gemma4DataCollator:
-    def __init__(self, base_collator):
+class _ZeroTokenTypeIdsCollator:
+    def __init__(self, base_collator, field_name):
         self.base_collator = base_collator
+        self.field_name = field_name
 
     def __call__(self, features):
         batch = self.base_collator(features)
-        batch["mm_token_type_ids"] = torch.zeros_like(batch["input_ids"])
+        batch[self.field_name] = torch.zeros_like(batch["input_ids"])
         return batch
 
 load_dotenv()
@@ -218,8 +226,10 @@ def train(
         processing_class=processing_class,
         peft_config=lora_config,
     )
-    if model_type in _NEEDS_MM_TOKEN_TYPE_IDS:
-        trainer.data_collator = _Gemma4DataCollator(trainer.data_collator)
+    if model_type in _TOKEN_TYPE_IDS_FIELD:
+        trainer.data_collator = _ZeroTokenTypeIdsCollator(
+            trainer.data_collator, _TOKEN_TYPE_IDS_FIELD[model_type]
+        )
 
     trainer.train()
     trainer.save_model()
