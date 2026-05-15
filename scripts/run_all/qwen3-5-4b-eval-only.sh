@@ -2,7 +2,7 @@
 set -euo pipefail
 
 uv sync
-MAX_JOBS=8 uv pip install flash-attn
+MAX_JOBS=8 uv pip install flash-attn --no-build-isolation
 
 ALIAS=qwen3-5-4b
 DOMAINS=(smcalflow geoquery overnight verilog spice)
