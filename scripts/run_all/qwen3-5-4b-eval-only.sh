@@ -4,7 +4,7 @@ set -euo pipefail
 uv sync
 MAX_JOBS=8 uv pip install flash-attn
 
-ALIAS=qwen3-4b
+ALIAS=qwen3-5-4b
 DOMAINS=(smcalflow geoquery overnight verilog spice)
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
@@ -15,11 +15,6 @@ if [[ -f "${REPO_ROOT}/.env" ]]; then
 fi
 
 source "$(dirname "$0")/_lib.sh"
-
-for DOMAIN in "${DOMAINS[@]}"; do
-    echo "######## TRAIN ${DOMAIN} (${ALIAS}) ########"
-    "${REPO_ROOT}/scripts/${DOMAIN}/${ALIAS}/train.sh" --nosave_locally
-done
 
 for DOMAIN in "${DOMAINS[@]}"; do
     echo "######## EVAL ${DOMAIN} (${ALIAS}) ########"

@@ -4,7 +4,7 @@ set -euo pipefail
 uv sync
 MAX_JOBS=8 uv pip install flash-attn
 
-ALIAS=qwen3-4b
+ALIAS=gemma-3-12b
 DOMAINS=(smcalflow geoquery overnight verilog spice)
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
