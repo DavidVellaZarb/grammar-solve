@@ -19,6 +19,7 @@ VERILOG_SKIP_RULES = {
     "start", "module", "list_of_ports", "parameter_list", "port_item",
     "port_declaration", "port_dir",
 }
+GRAMMAR_PROGRAM_SEPARATOR = "\nProgram:\n"
 
 
 def parse_verilog_eval_prompt(prompt: str) -> tuple[str, str]:
@@ -71,7 +72,11 @@ def evaluate(
     grammar_file: str | None = None,
     description_type: str = "description",
     generic: bool = False,
+    task: str = "program",
 ):
+    if task == "grammar_program":
+        include_grammar = False
+
     if k is not None:
         k_values = [int(x.strip()) for x in k.split(",")]
     else:
@@ -153,7 +158,7 @@ def evaluate(
             example["minimal_grammar"] = grammar_map[task_id]
 
         messages = format_prompt_messages(
-            example, include_grammar=include_grammar, task="program"
+            example, include_grammar=include_grammar, task=task
         )
         text = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True,
@@ -197,7 +202,16 @@ def evaluate(
             )
 
             for tid, prompt, pred in zip(batch_task_ids, batch_prompts, predictions):
-                completion = extract_completion(pred)
+                if task == "grammar_program":
+                    sep_idx = pred.find(GRAMMAR_PROGRAM_SEPARATOR)
+                    program_pred = (
+                        pred[sep_idx + len(GRAMMAR_PROGRAM_SEPARATOR):]
+                        if sep_idx >= 0
+                        else pred
+                    )
+                else:
+                    program_pred = pred
+                completion = extract_completion(program_pred)
                 all_samples.append({"task_id": tid, "completion": completion, "prompt_text": prompt})
 
     print(f"\nGenerated {len(all_samples)} total completions")
@@ -233,6 +247,7 @@ def evaluate(
             "max_new_tokens": max_new_tokens,
             "include_grammar": include_grammar,
             "grammar_file": grammar_file,
+            "task": task,
         },
         "samples_path": samples_path,
     }
