@@ -7,7 +7,7 @@ from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 from peft import PeftConfig, PeftModel
 from tqdm import tqdm
 from data import format_prompt_messages, load_raw_data
-from eval_utils import save_results
+from eval_utils import add_bootstrap_cis_to_metrics, save_results
 from grammar_utils import extract_grammar_from_output
 from model_loading import get_tokenizer, load_base_model, load_processor
 
@@ -31,13 +31,17 @@ def evaluate(
     grammar_file: str | None = None,
     include_grammar: bool = True,
     task: str = "program",
+    skip_execution: bool = False,
 ):
     from overnight_executor import denormalize_lf, execute, is_available
     assert is_available(), (
         "Overnight SEMPRE evaluator not found at third_party/overnight/evaluator/overnight. "
         "Run scripts/overnight/setup_evaluator.sh to set it up."
     )
-    print("Overnight executor loaded (execution accuracy will be computed)")
+    if skip_execution:
+        print("Overnight executor loaded (execution accuracy will NOT be computed)")
+    else:
+        print("Overnight executor loaded (execution accuracy will be computed)")
 
     peft_config = PeftConfig.from_pretrained(adapter)
     base_model_name = model_name or peft_config.base_model_name_or_path
@@ -113,18 +117,21 @@ def evaluate(
         pred_tokens = " ".join(re.findall(r'[a-zA-Z0-9_.]+|[^\s]', pred))
         exact_match = gold_tokens in pred_tokens
 
-        gold_denorm = denormalize_lf(gold)
-        gold_result = execute([gold_denorm])[0]
-        assert gold_result is not None, (
-            f"Gold program failed to execute: {gold}"
-        )
+        if skip_execution:
+            exec_match = None
+        else:
+            gold_denorm = denormalize_lf(gold)
+            gold_result = execute([gold_denorm])[0]
+            assert gold_result is not None, (
+                f"Gold program failed to execute: {gold}"
+            )
 
-        try:
-            pred_denorm = denormalize_lf(pred_program)
-            pred_result = execute([pred_denorm])[0]
-        except Exception:
-            pred_result = None
-        exec_match = gold_result == pred_result
+            try:
+                pred_denorm = denormalize_lf(pred_program)
+                pred_result = execute([pred_denorm])[0]
+            except Exception:
+                pred_result = None
+            exec_match = gold_result == pred_result
         gold_tokens = gold.replace("(", " ( ").replace(")", " ) ").split()
         pred_tokens = pred_program.replace("(", " ( ").replace(")", " ) ").split()
         bleu = sentence_bleu(
@@ -154,14 +161,24 @@ def evaluate(
         "total": total,
     }
 
-    exec_count = sum(1 for r in results if r["execution_match"])
-    metrics["execution_accuracy"] = exec_count / total if total > 0 else 0.0
-    metrics["execution_correct"] = exec_count
-    metrics["execution_total"] = total
+    ci_fields = {
+        "accuracy": "exact_match",
+        "exact_match": "exact_match",
+        "bleu": "bleu",
+    }
+    if not skip_execution:
+        exec_count = sum(1 for r in results if r["execution_match"])
+        metrics["execution_accuracy"] = exec_count / total if total > 0 else 0.0
+        metrics["execution_correct"] = exec_count
+        metrics["execution_total"] = total
+        ci_fields["execution_accuracy"] = "execution_match"
+
+    add_bootstrap_cis_to_metrics(metrics, results, ci_fields)
 
     print(f"Exact match:         {metrics['exact_match']:.4f} ({exact_count}/{total})")
-    print(f"Execution accuracy:  {metrics['execution_accuracy']:.4f} "
-          f"({metrics['execution_correct']}/{metrics['execution_total']})")
+    if "execution_accuracy" in metrics:
+        print(f"Execution accuracy:  {metrics['execution_accuracy']:.4f} "
+              f"({metrics['execution_correct']}/{metrics['execution_total']})")
     print(f"BLEU:                {metrics['bleu']:.4f}")
 
     if output_path:
@@ -238,11 +255,15 @@ def evaluate_predictions(
         "correct": exact_count,
         "total": total,
     }
+    ci_fields = {"accuracy": "exact_match", "exact_match": "exact_match", "bleu": "bleu"}
     if executor_ok:
         exec_count = sum(1 for r in results if r["execution_match"])
         metrics["execution_accuracy"] = exec_count / total if total > 0 else 0.0
         metrics["execution_correct"] = exec_count
         metrics["execution_total"] = total
+        ci_fields["execution_accuracy"] = "execution_match"
+
+    add_bootstrap_cis_to_metrics(metrics, results, ci_fields)
 
     print(f"Exact match:         {metrics['exact_match']:.4f} ({exact_count}/{total})")
     if "execution_accuracy" in metrics:
