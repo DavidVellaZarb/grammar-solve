@@ -701,6 +701,7 @@ def _load_knn(
     cache_dir: str,
     k: int,
     batch_size: int,
+    exclude_self: bool = False,
 ):
     train_data = load_raw_data(train_path)
     test_data = load_test_data(test_path)
@@ -719,7 +720,20 @@ def _load_knn(
     )
     del encoder
 
-    knn_indices = _find_knn(test_embeddings, train_embeddings, k)
+    exclude_indices = None
+    if exclude_self:
+        train_query_to_indices: dict[str, list[int]] = {}
+        for j, q in enumerate(train_queries):
+            train_query_to_indices.setdefault(q, []).append(j)
+        exclude_indices = [
+            train_query_to_indices.get(q, []) for q in test_queries
+        ]
+        n_excluded = sum(1 for idxs in exclude_indices if idxs)
+        print(f"exclude_self: filtered self-matches for {n_excluded}/{len(test_queries)} queries")
+
+    knn_indices = _find_knn(
+        test_embeddings, train_embeddings, k, exclude_indices=exclude_indices
+    )
     print(f"Found {k}-NN for {len(test_queries)} test queries")
 
     return train_data, test_data, knn_indices
@@ -762,6 +776,7 @@ def predict(
     mode: str = "async",
     poll_interval: int = 60,
     prompt_style: str = "default",
+    exclude_self: bool = False,
 ):
     print(f"Model: {model}, Embedding: {embedding_model}")
 
@@ -788,7 +803,8 @@ def predict(
             system_prompt = _get_system_prompt(grammar_path, full_grammar, prompt_style=prompt_style)
 
             train_data, test_data, knn_indices = _load_knn(
-                test_path, train_path, embedding_model, cache_dir, k, batch_size
+                test_path, train_path, embedding_model, cache_dir, k, batch_size,
+                exclude_self=exclude_self,
             )
             cache = load_cache(cache_path)
             print(f"Loaded cache with {len(cache)} entries")
@@ -825,7 +841,8 @@ def predict(
         system_prompt = _get_system_prompt(grammar_path, full_grammar, prompt_style=prompt_style)
 
         train_data, test_data, knn_indices = _load_knn(
-            test_path, train_path, embedding_model, cache_dir, k, batch_size
+            test_path, train_path, embedding_model, cache_dir, k, batch_size,
+            exclude_self=exclude_self,
         )
         cache = load_cache(cache_path)
         LLMClient.collect(metadata_path=meta_path, cache=cache, cache_path=cache_path)
@@ -839,7 +856,8 @@ def predict(
     system_prompt = _get_system_prompt(grammar_path, full_grammar, prompt_style=prompt_style)
 
     train_data, test_data, knn_indices = _load_knn(
-        test_path, train_path, embedding_model, cache_dir, k, batch_size
+        test_path, train_path, embedding_model, cache_dir, k, batch_size,
+        exclude_self=exclude_self,
     )
     cache = load_cache(cache_path)
     print(f"Loaded cache with {len(cache)} entries")
@@ -878,6 +896,7 @@ def collect(
     metadata_path: str | None = None,
     task_name: str | None = None,
     prompt_style: str = "default",
+    exclude_self: bool = False,
 ):
     cache = load_cache(cache_path)
     LLMClient.collect(
@@ -889,7 +908,8 @@ def collect(
     system_prompt = _get_system_prompt(grammar_path, full_grammar, prompt_style=prompt_style)
 
     train_data, test_data, knn_indices = _load_knn(
-        test_path, train_path, embedding_model, cache_dir, k, batch_size
+        test_path, train_path, embedding_model, cache_dir, k, batch_size,
+        exclude_self=exclude_self,
     )
 
     _write_from_cache(

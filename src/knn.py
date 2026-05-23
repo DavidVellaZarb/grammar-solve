@@ -44,9 +44,16 @@ def _load_or_compute_embeddings(
 
 
 def _find_knn(
-    query_embeddings: np.ndarray, train_embeddings: np.ndarray, k: int
+    query_embeddings: np.ndarray,
+    train_embeddings: np.ndarray,
+    k: int,
+    exclude_indices: list[list[int]] | None = None,
 ) -> np.ndarray:
     scores = query_embeddings @ train_embeddings.T
+    if exclude_indices is not None:
+        for i, idxs in enumerate(exclude_indices):
+            if idxs:
+                scores[i, idxs] = -np.inf
     if k >= scores.shape[1]:
         return np.argsort(-scores, axis=1)
     indices = np.argpartition(-scores, k, axis=1)[:, :k]
