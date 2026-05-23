@@ -42,7 +42,7 @@ uv run python src/eval_verilog.py \
     --problem_file "$PROBLEM_FILE" \
     --include_grammar \
     --grammar_file "$GRAMMAR_FILE" \
-    --n_samples 5 \
+    --n_samples 1 \
     --temperature 0.8 \
     --output_path "$OUTPUT_PATH"
 
