@@ -14,7 +14,7 @@ fi
 : "${HF_NAMESPACE:?Set HF_NAMESPACE in your environment or .env}"
 : "${HF_TOKEN:?Set HF_TOKEN in your environment or .env}"
 
-MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3.5-9B-Instruct}"
+MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3.5-9B}"
 MODEL_ALIAS="${MODEL_ALIAS:-qwen3-5-9b}"
 DOMAIN="smcalflow"
 K="${K:-64}"

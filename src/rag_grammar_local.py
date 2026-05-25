@@ -25,7 +25,7 @@ def predict(
     train_path: str = "data/smcalflow/train.json",
     grammar_path: str = "grammars/smcalflow.lark",
     output_path: str = "outputs/predicted_grammars/openweight_rag/test.json",
-    model: str = "Qwen/Qwen3.5-9B-Instruct",
+    model: str = "Qwen/Qwen3.5-9B",
     embedding_model: str = "BAAI/bge-large-en-v1.5",
     k: int = 64,
     cache_path: str = "cache/rag_local_cache.json",
