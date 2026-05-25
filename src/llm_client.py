@@ -7,15 +7,7 @@ import os
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
-
 from dotenv import load_dotenv
-
-if TYPE_CHECKING:
-    from anthropic import AsyncAnthropic
-    from anthropic.types import MessageParam
-    from openai import AsyncOpenAI
-    from openai.types.chat import ChatCompletionMessageParam
 
 load_dotenv()
 
@@ -34,10 +26,15 @@ class Api(str, Enum):
 
 
 _ANTHROPIC_NO_TEMPERATURE_PREFIXES = ("claude-opus-4-7",)
+_OPENAI_NO_TEMPERATURE_PREFIXES = ("gpt-5.5",)
 
 
 def _anthropic_supports_temperature(model: str) -> bool:
     return not model.startswith(_ANTHROPIC_NO_TEMPERATURE_PREFIXES)
+
+
+def _openai_supports_temperature(model: str) -> bool:
+    return not model.startswith(_OPENAI_NO_TEMPERATURE_PREFIXES)
 
 
 def cache_key(messages: list[dict], model: str) -> str:
@@ -154,12 +151,11 @@ class LLMClient:
         raise RuntimeError("Unreachable: all retries should either return or raise")
 
     async def _call_anthropic(self, messages: list[dict]) -> str:
-        client = cast(AsyncAnthropic, self._get_client())
+        client = self._get_client()
         system, user_messages = _extract_system_and_user_messages(messages)
-        typed_messages = cast(list[MessageParam], user_messages)
         kwargs: dict = {
             "model": self.model,
-            "messages": typed_messages,
+            "messages": user_messages,
             "max_tokens": self.max_tokens,
         }
         if _anthropic_supports_temperature(self.model):
@@ -172,22 +168,22 @@ class LLMClient:
         return text.strip()
 
     async def _call_openai(self, messages: list[dict]) -> str:
-        client = cast(AsyncOpenAI, self._get_client())
-        typed_messages = cast(list[ChatCompletionMessageParam], messages)
+        client = self._get_client()
         if self.api == Api.openai:
-            response = await client.chat.completions.create(
-                model=self.model,
-                messages=typed_messages,
-                temperature=self.temperature,
-                max_completion_tokens=self.max_tokens,
-            )
+            kwargs: dict = {
+                "model": self.model,
+                "messages": messages,
+                "max_completion_tokens": self.max_tokens,
+            }
         else:
-            response = await client.chat.completions.create(
-                model=self.model,
-                messages=typed_messages,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-            )
+            kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "max_tokens": self.max_tokens,
+            }
+        if _openai_supports_temperature(self.model):
+            kwargs["temperature"] = self.temperature
+        response = await client.chat.completions.create(**kwargs)
         return (response.choices[0].message.content or "").strip()
 
     def submit(
@@ -295,16 +291,18 @@ class LLMClient:
         chunks = []
 
         for custom_id, messages in uncached:
+            body: dict = {
+                "model": self.model,
+                "messages": messages,
+                "max_completion_tokens": self.max_tokens,
+            }
+            if _openai_supports_temperature(self.model):
+                body["temperature"] = self.temperature
             line = json.dumps({
                 "custom_id": custom_id,
                 "method": "POST",
                 "url": "/v1/chat/completions",
-                "body": {
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": self.temperature,
-                    "max_completion_tokens": self.max_tokens,
-                },
+                "body": body,
             })
             line_size = len(line.encode("utf-8")) + 1
             if current_lines and current_size + line_size > MAX_BATCH_SIZE_BYTES_OPENAI:
@@ -422,9 +420,14 @@ def _check_openai(batches_info: list[dict]) -> list[str]:
     statuses = []
     for i, bi in enumerate(batches_info):
         batch = client.batches.retrieve(bi["batch_id"])
-        statuses.append(batch.status)
+        status = batch.status
+        if status == "completed" and batch.request_counts:
+            rc = batch.request_counts
+            if rc.completed == 0 and rc.failed > 0:
+                status = "failed"
+        statuses.append(status)
         prefix = f"  [{i+1}/{len(batches_info)}] {batch.id}"
-        print(f"{prefix}: {batch.status}")
+        print(f"{prefix}: {status}")
         if batch.request_counts:
             rc = batch.request_counts
             print(f"    Completed: {rc.completed}, Failed: {rc.failed}, Total: {rc.total}")
