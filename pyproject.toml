@@ -16,6 +16,7 @@ dependencies = [
     "ninja>=1.11",
     "setuptools>=82.0.0",
     "matplotlib>=3.8",
+    "matplotlib-venn>=1.1",
     "lark>=1.1",
     "pytest>=8.0",
     "anthropic>=0.42",
@@ -30,7 +31,6 @@ dependencies = [
     "nltk>=3.8",
     "trimesh>=4.11.3",
     "transformers-cfg>=0.2",
-    "pyperplan>=2.1",
     "pyswip>=0.2",
     "torchvision>=0.25.0",
 ]
