@@ -27,7 +27,6 @@ dependencies = [
     "tiktoken>=0.12.0",
     "sentencepiece>=0.2.1",
     "rdkit>=2023.9.1",
-    "selfies>=2.2.0",
     "nltk>=3.8",
     "trimesh>=4.11.3",
     "transformers-cfg>=0.2",
